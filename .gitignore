@@ -1,0 +1,75 @@
+# Portico / Go
+# Binaries and build output
+/bin/
+/dist/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace and vendoring
+go.work
+go.work.sum
+/vendor/
+
+# Coverage, profiling, and test artifacts
+coverage.out
+coverage.html
+*.coverprofile
+*.prof
+*.pprof
+*.trace
+
+# Go fuzzing cache
+testdata/fuzz/*
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+Session.vim
+Sessionx.vim
+
+# Environment and local config
+.env
+.env.*
+*.local
+
+# Portico local runtime/config test files
+# Keep real test fixtures under testdata/ with explicit names.
+.portico/
+portico.toml
+jokes.local.toml
+
+# Logs
+*.log
+logs/
+
+# Gentoo / Portage local test sandboxes
+# Useful if you create fake /etc/portage trees or chroot-ish fixtures locally.
+tmp/
+sandbox/
+rootfs/
+stage3/
+*.tbz2
+*.tar.xz
+*.tar.zst
+
+# Generated documentation/site output
+/site/
+/public/
+/docs/.vitepress/dist/
+/docs/.vitepress/cache/
