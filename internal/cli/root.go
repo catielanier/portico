@@ -22,6 +22,8 @@ func init() {
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(rebuildCmd)
+	rootCmd.AddCommand(findCmd)
+	rootCmd.AddCommand(updateCmd)
 }
 
 func requireAtom(args []string) (string, error) {
