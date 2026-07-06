@@ -24,6 +24,8 @@ func init() {
 	rootCmd.AddCommand(rebuildCmd)
 	rootCmd.AddCommand(findCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(newRepoCommand("repo", "Manage Portage repositories"))
+	rootCmd.AddCommand(newRepoCommand("overlay", "Manage Portage overlays"))
 }
 
 func requireAtom(args []string) (string, error) {
