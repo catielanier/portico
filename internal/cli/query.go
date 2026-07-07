@@ -40,37 +40,67 @@ func renderQueryResult(result *portage.PackageQuery) {
 
 	if len(result.Uses) == 0 {
 		fmt.Println("No USE flags found.")
-		fmt.Println()
-		fmt.Println("Raw output:")
-		fmt.Println(result.RawUses)
+
+		if result.RawUses != "" {
+			fmt.Println()
+			fmt.Println("Raw output:")
+			fmt.Println(result.RawUses)
+		}
+
 		return
 	}
+
+	showInstalledColumn := false
+	for _, flag := range result.Uses {
+		if flag.Installed != nil {
+			showInstalledColumn = true
+			break
+		}
+	}
+
+	fmt.Println("Legend:")
+	fmt.Println("  U = flag setting for next build")
+	if showInstalledColumn {
+		fmt.Println("  I = flag setting on installed package")
+	}
+	fmt.Println()
 
 	fmt.Println("USE flags:")
 	fmt.Println()
 
+	if showInstalledColumn {
+		fmt.Println("  U I  Flag")
+	} else {
+		fmt.Println("  U  Flag")
+	}
+
 	for _, flag := range result.Uses {
-		state := "-"
+		useState := "-"
 		if flag.EnabledForBuild {
-			state = "+"
+			useState = "+"
 		}
 
-		installed := ""
-		if flag.Installed != nil {
-			if *flag.Installed {
-				installed = " installed:+"
-			} else {
-				installed = " installed:-"
+		if showInstalledColumn {
+			installedState := "?"
+			if flag.Installed != nil {
+				if *flag.Installed {
+					installedState = "+"
+				} else {
+					installedState = "-"
+				}
 			}
-		}
 
-		fmt.Printf("  %s %-34s%s\n", state, flag.Name, installed)
+			fmt.Printf("  %s %s  %-34s\n", useState, installedState, flag.Name)
+		} else {
+			fmt.Printf("  %s  %-34s\n", useState, flag.Name)
+		}
 
 		if flag.Description != "" {
-			fmt.Printf("      %s\n", flag.Description)
+			fmt.Printf("       %s\n", flag.Description)
 		}
 	}
 
+	fmt.Println()
 	fmt.Println("Next:")
 	fmt.Printf("  sudo portico install %s\n", result.Atom)
 	fmt.Printf("  sudo portico rebuild %s\n", result.Atom)

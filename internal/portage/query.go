@@ -58,7 +58,7 @@ func (q *EqueryQuerier) Query(atom string) (*PackageQuery, error) {
 }
 
 func (q *EqueryQuerier) equeryUses(atom string) (string, error) {
-	cmd := exec.Command("equery", "uses", atom)
+	cmd := exec.Command("equery", "-C", "-N", "u", atom)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -80,40 +80,42 @@ func (q *EqueryQuerier) equeryUses(atom string) (string, error) {
 func ParseEqueryUses(raw string) []UseFlag {
 	lines := strings.Split(raw, "\n")
 
-	// Verbose/table-ish shape:
-	//  + + alsa       : Add support for media-libs/alsa-lib
-	//  - - pulseaudio : Add support for PulseAudio
-	verboseUseLinePattern := regexp.MustCompile(`^\s*([+-])\s+([+-])?\s*([A-Za-z0-9_+.-]+)\s*:\s*(.*)$`)
-
-	// Compact shape:
-	// +alsa
-	// -browser
+	verboseUseLinePattern := regexp.MustCompile(`^\s*([+-])\s+([+-])\s+([A-Za-z0-9_+.-]+)\s*:\s*(.*)$`)
 	compactUseLinePattern := regexp.MustCompile(`^\s*([+-])([A-Za-z0-9_+.-]+)\s*$`)
 
 	var flags []UseFlag
+	var current *UseFlag
+
+	flush := func() {
+		if current == nil {
+			return
+		}
+
+		current.Description = strings.Join(strings.Fields(current.Description), " ")
+		flags = append(flags, *current)
+		current = nil
+	}
 
 	for _, line := range lines {
 		if matches := verboseUseLinePattern.FindStringSubmatch(line); matches != nil {
-			enabledForBuild := matches[1] == "+"
+			flush()
 
-			var installed *bool
-			if matches[2] == "+" || matches[2] == "-" {
-				value := matches[2] == "+"
-				installed = &value
-			}
+			installedValue := matches[2] == "+"
 
-			flags = append(flags, UseFlag{
+			current = &UseFlag{
 				Name:            matches[3],
 				Description:     strings.TrimSpace(matches[4]),
-				EnabledForBuild: enabledForBuild,
-				Installed:       installed,
+				EnabledForBuild: matches[1] == "+",
+				Installed:       &installedValue,
 				Raw:             line,
-			})
+			}
 
 			continue
 		}
 
 		if matches := compactUseLinePattern.FindStringSubmatch(line); matches != nil {
+			flush()
+
 			flags = append(flags, UseFlag{
 				Name:            matches[2],
 				Description:     "",
@@ -124,7 +126,20 @@ func ParseEqueryUses(raw string) []UseFlag {
 
 			continue
 		}
+
+		if current != nil {
+			trimmed := strings.TrimSpace(line)
+
+			if trimmed != "" &&
+				!strings.HasPrefix(trimmed, "[") &&
+				!strings.HasPrefix(trimmed, "*") &&
+				trimmed != "U I" {
+				current.Description += " " + trimmed
+			}
+		}
 	}
+
+	flush()
 
 	return flags
 }
