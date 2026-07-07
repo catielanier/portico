@@ -1,3 +1,12 @@
+[will_inspect_use_flags]
+other = "inspect USE flags for {{.Atom}}"
+
+[will_write_package_use]
+other = "write selected USE flags to {{.Path}}"
+
+[will_not_install_in_prototype]
+other = "install anything in this prototype step"
+
 [plan_title]
 other = "Portico Plan"
 
@@ -75,3 +84,6 @@ other = "become your BIOS therapist"
 
 [joke.overlay_goblins]
 other = "pretend overlays are not where the goblins keep their furniture"
+
+[joke.obs_poggers]
+other = "immediately make your stream totally poggers."

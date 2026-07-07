@@ -37,6 +37,7 @@ var defaultJokes = []Joke{
 	{Key: "joke.linkedin_rust", Scopes: []string{"atom:dev-lang/rust"}},
 	{Key: "joke.wordpress_necromancy", Scopes: []string{"atom:dev-lang/php"}},
 	{Key: "joke.java_time_machine", Scopes: []string{"atom:dev-lang/java"}},
+	{Key: "joke.obs_poggers", Scopes: []string{"atom:media-video/obs-studio"}},
 
 	{Key: "joke.st_anger_snare", Scopes: []string{"category:media-sound", "category:media-video"}},
 	{Key: "joke.bios_therapist", Scopes: []string{"category:sys-kernel", "feature:bootloader"}},
