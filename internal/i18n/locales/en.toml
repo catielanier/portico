@@ -1,0 +1,77 @@
+[plan_title]
+other = "Portico Plan"
+
+[plan_will]
+other = "Portico will:"
+
+[plan_will_not]
+other = "Portico will not:"
+
+[confirm_continue]
+other = "Continue? [y/N]"
+
+[will_install_atom]
+other = "install {{.Atom}}"
+
+[will_run_emerge_pretend]
+other = "run emerge --pretend --verbose {{.Atom}}"
+
+[will_ask_before_emerge]
+other = "ask before running emerge --ask --verbose {{.Atom}}"
+
+[will_not_modify_global_use]
+other = "modify global USE flags in {{.Path}}"
+
+[will_not_overwrite_package_use]
+other = "overwrite user-managed package.use entries"
+
+[joke.arch]
+other = "tell you, \"Actually, I use Arch.\""
+
+[joke.lmgtfy]
+other = "provide you with a LMGTFY link"
+
+[joke.old_forum]
+other = "open a 2008 forum thread and call it documentation"
+
+[joke.judge_make_conf]
+other = "judge your make.conf out loud"
+
+[joke.ceiling_cat]
+other = "be Ceiling Cat"
+
+[joke.init_flamewar]
+other = "start a flame war with you on your choice of init system"
+
+[joke.surprise_desktop]
+other = "install a desktop environment as a little surprise"
+
+[joke.alias_vim_to_nano]
+other = "alias vim to nano"
+
+[joke.just_use_ubuntu]
+other = "tell you to just use Ubuntu"
+
+[joke.mirror_stress_toy]
+other = "treat donated mirrors like a stress toy"
+
+[joke.just_use_rust]
+other = "tell you to \"just use Rust\""
+
+[joke.linkedin_rust]
+other = "automate posting on LinkedIn that you ported everything to Rust"
+
+[joke.wordpress_necromancy]
+other = "necromance your WordPress plugins"
+
+[joke.java_time_machine]
+other = "create a time machine to bring your enterprise stack to the current year"
+
+[joke.st_anger_snare]
+other = "replace your snare sample with St. Anger"
+
+[joke.bios_therapist]
+other = "become your BIOS therapist"
+
+[joke.overlay_goblins]
+other = "pretend overlays are not where the goblins keep their furniture"
