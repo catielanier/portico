@@ -1,10 +1,10 @@
 package main
 
-import {
+import (
 	"os"
 
 	"github.com/catielanier/portico/internal/cli"
-}
+)
 
 func main() {
 	if err := cli.Execute(); err != nil {
