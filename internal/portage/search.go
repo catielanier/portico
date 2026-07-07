@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -58,7 +59,10 @@ func (s *EmergeSearcher) Find(query string) ([]SearchResult, error) {
 		return nil, fmt.Errorf("emerge --search failed: %w", err)
 	}
 
-	return ParseEmergeSearch(stdout.String()), nil
+	results := ParseEmergeSearch(stdout.String())
+	RankSearchResults(query, results)
+
+	return results, nil
 }
 
 func ParseEmergeSearch(raw string) []SearchResult {
@@ -122,6 +126,44 @@ func ParseEmergeSearch(raw string) []SearchResult {
 	flush()
 
 	return results
+}
+
+func RankSearchResults(query string, results []SearchResult) {
+	normalizedQuery := normalizeSearchText(query)
+
+	sort.SliceStable(results, func(i, j int) bool {
+		return searchRank(normalizedQuery, results[i]) < searchRank(normalizedQuery, results[j])
+	})
+}
+
+func searchRank(query string, result SearchResult) int {
+	atom := normalizeSearchText(result.Atom)
+	name := normalizeSearchText(result.Name)
+	category := normalizeSearchText(result.Category)
+	description := normalizeSearchText(result.Description)
+
+	switch {
+	case atom == query:
+		return 0
+	case name == query:
+		return 1
+	case strings.HasSuffix(atom, "/"+query):
+		return 2
+	case strings.Contains(name, query):
+		return 3
+	case strings.Contains(atom, query):
+		return 4
+	case strings.Contains(category, query):
+		return 5
+	case strings.Contains(description, query):
+		return 6
+	default:
+		return 99
+	}
+}
+
+func normalizeSearchText(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func splitAtom(atom string) (string, string) {
