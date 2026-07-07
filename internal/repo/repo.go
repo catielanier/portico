@@ -34,3 +34,34 @@ type Manager interface {
 	Add(req AddRequest) error
 	Remove(req RemoveRequest) error
 }
+
+type StubManager struct{}
+
+func NewStubManager() *StubManager {
+	return &StubManager{}
+}
+
+func (m *StubManager) List() ([]Repository, error) {
+	return []Repository{
+		{
+			Name:        "gentoo",
+			Kind:        RepositoryKindOfficial,
+			Enabled:     true,
+			Description: "Official Gentoo repository",
+		},
+		{
+			Name:        "guru",
+			Kind:        RepositoryKindOverlay,
+			Enabled:     false,
+			Description: "Gentoo User Repository",
+		},
+	}, nil
+}
+
+func (m *StubManager) Add(req AddRequest) error {
+	return nil
+}
+
+func (m *StubManager) Remove(req RemoveRequest) error {
+	return nil
+}

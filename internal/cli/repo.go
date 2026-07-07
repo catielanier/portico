@@ -71,6 +71,15 @@ func newRepoAddCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
+			manager := repo.NewStubManager()
+
+			if err := manager.Add(repo.AddRequest{
+				Name: name,
+				Kind: repo.RepositoryKindOverlay,
+			}); err != nil {
+				return err
+			}
+
 			fmt.Printf("Portico repo add: %s\n", name)
 			fmt.Println("Repository enablement is not implemented yet.")
 			fmt.Println()
@@ -90,6 +99,14 @@ func newRepoRemoveCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+
+			manager := repo.NewStubManager()
+
+			if err := manager.Remove(repo.RemoveRequest{
+				Name: name,
+			}); err != nil {
+				return err
+			}
 
 			fmt.Printf("Portico repo remove: %s\n", name)
 			fmt.Println("Repository removal is not implemented yet.")

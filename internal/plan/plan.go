@@ -1,13 +1,14 @@
 package plan
 
 type Item struct {
-	Text   string
+	Key    string
+	Data   map[string]any
 	Detail string
 }
 
 type Plan struct {
-	Title   string
-	Action  string
-	Will    []Item
-	WillNot []Item
+	TitleKey string
+	Action   string
+	Will     []Item
+	WillNot  []Item
 }
