@@ -80,35 +80,50 @@ func (q *EqueryQuerier) equeryUses(atom string) (string, error) {
 func ParseEqueryUses(raw string) []UseFlag {
 	lines := strings.Split(raw, "\n")
 
-	// Common shape:
+	// Verbose/table-ish shape:
 	//  + + alsa       : Add support for media-libs/alsa-lib
 	//  - - pulseaudio : Add support for PulseAudio
-	//  +   foo        : Description
-	useLinePattern := regexp.MustCompile(`^\s*([+-])\s+([+-])?\s*([A-Za-z0-9_+.-]+)\s*:\s*(.*)$`)
+	verboseUseLinePattern := regexp.MustCompile(`^\s*([+-])\s+([+-])?\s*([A-Za-z0-9_+.-]+)\s*:\s*(.*)$`)
+
+	// Compact shape:
+	// +alsa
+	// -browser
+	compactUseLinePattern := regexp.MustCompile(`^\s*([+-])([A-Za-z0-9_+.-]+)\s*$`)
 
 	var flags []UseFlag
 
 	for _, line := range lines {
-		matches := useLinePattern.FindStringSubmatch(line)
-		if matches == nil {
+		if matches := verboseUseLinePattern.FindStringSubmatch(line); matches != nil {
+			enabledForBuild := matches[1] == "+"
+
+			var installed *bool
+			if matches[2] == "+" || matches[2] == "-" {
+				value := matches[2] == "+"
+				installed = &value
+			}
+
+			flags = append(flags, UseFlag{
+				Name:            matches[3],
+				Description:     strings.TrimSpace(matches[4]),
+				EnabledForBuild: enabledForBuild,
+				Installed:       installed,
+				Raw:             line,
+			})
+
 			continue
 		}
 
-		enabledForBuild := matches[1] == "+"
+		if matches := compactUseLinePattern.FindStringSubmatch(line); matches != nil {
+			flags = append(flags, UseFlag{
+				Name:            matches[2],
+				Description:     "",
+				EnabledForBuild: matches[1] == "+",
+				Installed:       nil,
+				Raw:             line,
+			})
 
-		var installed *bool
-		if matches[2] == "+" || matches[2] == "-" {
-			value := matches[2] == "+"
-			installed = &value
+			continue
 		}
-
-		flags = append(flags, UseFlag{
-			Name:            matches[3],
-			Description:     strings.TrimSpace(matches[4]),
-			EnabledForBuild: enabledForBuild,
-			Installed:       installed,
-			Raw:             line,
-		})
 	}
 
 	return flags

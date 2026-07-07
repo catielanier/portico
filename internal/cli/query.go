@@ -64,13 +64,11 @@ func renderQueryResult(result *portage.PackageQuery) {
 			}
 		}
 
-		fmt.Printf("  %s %-18s%s\n", state, flag.Name, installed)
+		fmt.Printf("  %s %-34s%s\n", state, flag.Name, installed)
 
 		if flag.Description != "" {
-			fmt.Printf("    %s\n", flag.Description)
+			fmt.Printf("      %s\n", flag.Description)
 		}
-
-		fmt.Println()
 	}
 
 	fmt.Println("Next:")
