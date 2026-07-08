@@ -1,6 +1,9 @@
 package cli
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 type UserPrivilegeLevel string
 
@@ -23,4 +26,12 @@ func checkSuperuserPrivileges() UserPrivilegeLevel {
 	} else {
 		return User
 	}
+}
+
+func requireRoot(commandName string) error {
+	if checkSuperuserPrivileges() != User {
+		return nil
+	}
+
+	return fmt.Errorf("Portico needs root privileges to %s. Please run with sudo or as root", commandName)
 }
