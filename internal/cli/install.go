@@ -6,7 +6,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/catielanier/portico/internal/i18n"
 	"github.com/catielanier/portico/internal/jokes"
@@ -14,14 +13,6 @@ import (
 	"github.com/catielanier/portico/internal/portage"
 	"github.com/catielanier/portico/internal/ui"
 	"github.com/spf13/cobra"
-)
-
-type UserPrivilegeLevel string
-
-const (
-	Superuser UserPrivilegeLevel = "superuser"
-	Sudo      UserPrivilegeLevel = "sudo"
-	User      UserPrivilegeLevel = "user"
 )
 
 var installCmd = &cobra.Command{
@@ -57,21 +48,6 @@ var installCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-func checkSuperuserPrivileges() UserPrivilegeLevel {
-	isRoot := os.Geteuid() == 0
-
-	sudoUser := os.Getenv("SUDO_USER")
-	isSudo := isRoot && sudoUser != ""
-
-	if isRoot && isSudo {
-		return Sudo
-	} else if isRoot {
-		return Superuser
-	} else {
-		return User
-	}
 }
 
 func renderInstallPrototype(queryResult *portage.PackageQuery, t *i18n.Translator) {
