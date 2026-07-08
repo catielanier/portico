@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type RepositoryStatus struct {
 	Name        string
 	Enabled     bool
 	Location    string
+	LastSync    *time.Time
 	NeverSynced bool
 }
 
@@ -18,7 +20,7 @@ func EnabledRepositories() ([]RepositoryStatus, error) {
 
 	entries, err := os.ReadDir(reposConfDir)
 	if err != nil {
-		// If repos.conf does not exist, do not block find.
+		// If repos.conf does not exist, do not block commands.
 		return nil, nil
 	}
 
@@ -54,6 +56,31 @@ func NeverSyncedRepositories(repositories []RepositoryStatus) []RepositoryStatus
 	return out
 }
 
+func RepositoriesNeedingSync(repositories []RepositoryStatus, staleAfter time.Duration) []RepositoryStatus {
+	var out []RepositoryStatus
+
+	for _, repository := range repositories {
+		if !repository.Enabled {
+			continue
+		}
+
+		if repository.NeverSynced {
+			out = append(out, repository)
+			continue
+		}
+
+		if repository.LastSync == nil {
+			continue
+		}
+
+		if time.Since(*repository.LastSync) >= staleAfter {
+			out = append(out, repository)
+		}
+	}
+
+	return out
+}
+
 func parseReposConf(path string) ([]RepositoryStatus, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -72,6 +99,7 @@ func parseReposConf(path string) ([]RepositoryStatus, error) {
 
 		if current.Name != "" {
 			current.Enabled = true
+			current.LastSync = repositoryLastSync(*current)
 			current.NeverSynced = repositoryLooksNeverSynced(*current)
 			repositories = append(repositories, *current)
 		}
@@ -129,4 +157,29 @@ func repositoryLooksNeverSynced(repository RepositoryStatus) bool {
 	}
 
 	return true
+}
+
+func repositoryLastSync(repository RepositoryStatus) *time.Time {
+	if repository.Location == "" {
+		return nil
+	}
+
+	// Gentoo repositories commonly have metadata/timestamp after sync.
+	candidates := []string{
+		filepath.Join(repository.Location, "metadata", "timestamp"),
+		filepath.Join(repository.Location, "profiles", "repo_name"),
+		filepath.Join(repository.Location),
+	}
+
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err != nil {
+			continue
+		}
+
+		modTime := info.ModTime()
+		return &modTime
+	}
+
+	return nil
 }

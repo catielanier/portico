@@ -37,7 +37,7 @@ var installCmd = &cobra.Command{
 
 		atom := args[0]
 
-		if err := maybeSyncNeverSyncedRepositories(); err != nil {
+		if err := syncRepositoriesForMutation(); err != nil {
 			return err
 		}
 
