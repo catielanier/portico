@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"bufio"
+	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/catielanier/portico/internal/portage"
+	"github.com/catielanier/portico/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -40,49 +40,47 @@ func maybeSyncNeverSyncedRepositories() error {
 		return err
 	}
 
-	neverSynced := portage.NeverSyncedRepositories(repositories)
-	if len(neverSynced) == 0 {
+	neverSyncedRepositories := dedupeRepositories(portage.NeverSyncedRepositories(repositories))
+	if len(neverSyncedRepositories) == 0 {
 		return nil
 	}
 
-	fmt.Println("Portico noticed enabled repositories that do not appear to have been synced yet:")
+	fmt.Println("Portico noticed some enabled repositories have not been synced yet:")
 	fmt.Println()
 
-	for _, repository := range neverSynced {
+	for _, repository := range neverSyncedRepositories {
 		fmt.Printf("  %s\n", repository.Name)
 	}
 
 	fmt.Println()
-	fmt.Println("Packages from these repositories may not appear in search results until they are synced.")
-	fmt.Print("Sync them now? [Y/n] ")
+	fmt.Println("Packages from these repositories will not appear in search results until they are synced.")
+	fmt.Println()
 
-	reader := bufio.NewReader(os.Stdin)
-
-	answer, err := reader.ReadString('\n')
+	confirmed, err := confirmDefaultNo("Sync these repositories now?")
 	if err != nil {
 		return err
 	}
 
-	answer = strings.ToLower(strings.TrimSpace(answer))
-
-	if answer == "n" || answer == "no" {
-		fmt.Println()
-		fmt.Println("Continuing with currently available repository metadata.")
-		fmt.Println()
+	if !confirmed {
 		return nil
 	}
 
 	syncer := portage.NewRepositorySyncer()
 
-	for _, repository := range neverSynced {
-		fmt.Printf("Syncing %s...\n", repository.Name)
+	if err := prepareRepositorySyncer(syncer); err != nil {
+		return err
+	}
 
-		if err := syncer.Sync(repository.Name); err != nil {
+	for _, repository := range neverSyncedRepositories {
+		repository := repository
+
+		if err := ui.RunStepContext("Syncing "+repository.Name, func(ctx context.Context) error {
+			return syncer.SyncContext(ctx, repository.Name)
+		}); err != nil {
 			return err
 		}
 	}
 
-	fmt.Println()
 	return nil
 }
 
@@ -94,7 +92,7 @@ func renderFindResults(query string, results []portage.SearchResult) {
 	fmt.Println()
 
 	if len(results) == 0 {
-		fmt.Println("No matching packages found.")
+		fmt.Println("No packages found.")
 		return
 	}
 
@@ -112,33 +110,31 @@ func renderFindResults(query string, results []portage.SearchResult) {
 			fmt.Println("    Available from:")
 
 			for _, source := range result.Sources {
-				repository := source.Repository
-				if repository == "" {
-					repository = "unknown"
-				}
+				status := strings.TrimSpace(source.Status)
+				version := strings.TrimSpace(source.Version)
 
-				version := source.Version
-				if version == "" {
-					version = "unknown"
-				}
-
-				status := source.Status
 				if status == "" {
 					status = "available"
 				}
 
-				fmt.Printf("      %-12s %-10s %s\n", repository, version, status)
+				if version == "" {
+					fmt.Printf("      %-10s %s\n", source.Repository, status)
+				} else {
+					fmt.Printf("      %-10s %-12s %s\n", source.Repository, version, status)
+				}
 			}
-		}
-
-		if result.Installed {
-			fmt.Println("    installed")
 		}
 
 		fmt.Println()
 	}
 
 	fmt.Println("Next:")
-	fmt.Printf("  portico query %s\n", results[0].Atom)
-	fmt.Printf("  sudo portico install %s\n", results[0].Atom)
+	if len(results) == 1 {
+		fmt.Printf("  portico query %s\n", results[0].Atom)
+		fmt.Printf("  sudo portico install %s\n", results[0].Atom)
+		return
+	}
+
+	fmt.Println("  portico query <atom>")
+	fmt.Println("  sudo portico install <atom>")
 }

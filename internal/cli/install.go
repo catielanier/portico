@@ -24,10 +24,9 @@ var installCmd = &cobra.Command{
 
 		atom := args[0]
 
-		if err := ui.RunStep("Checking repository sync state", syncRepositoriesForMutation); err != nil {
+		if err := syncRepositoriesForMutation(); err != nil {
 			return err
 		}
-
 		var sandbox *portage.ConfigSandbox
 
 		if err := ui.RunStep("Creating temporary Portage config sandbox", func() error {

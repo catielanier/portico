@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -12,23 +13,37 @@ type stepDoneMsg struct {
 }
 
 type stepModel struct {
-	label   string
-	spinner spinner.Model
-	run     func() error
-	err     error
-	done    bool
+	label  string
+	spin   spinner.Model
+	run    func(context.Context) error
+	ctx    context.Context
+	cancel context.CancelFunc
+	err    error
+	done   bool
 }
 
 func RunStep(label string, run func() error) error {
+	return RunStepContext(label, func(context.Context) error {
+		return run()
+	})
+}
+
+func RunStepContext(label string, run func(context.Context) error) error {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	model := stepModel{
-		label:   label,
-		spinner: spinner.New(),
-		run:     run,
+		label:  label,
+		spin:   spinner.New(),
+		run:    run,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	program := tea.NewProgram(model)
 
 	finalModel, err := program.Run()
+	cancel()
+
 	if err != nil {
 		return err
 	}
@@ -43,15 +58,28 @@ func RunStep(label string, run func() error) error {
 
 func (m stepModel) Init() tea.Cmd {
 	return tea.Batch(
-		m.spinner.Tick,
+		m.spin.Tick,
 		func() tea.Msg {
-			return stepDoneMsg{err: m.run()}
+			return stepDoneMsg{err: m.run(m.ctx)}
 		},
 	)
 }
 
 func (m stepModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc", "q":
+			if m.cancel != nil {
+				m.cancel()
+			}
+
+			m.err = context.Canceled
+			m.done = true
+
+			return m, tea.Quit
+		}
+
 	case stepDoneMsg:
 		m.err = msg.err
 		m.done = true
@@ -59,7 +87,7 @@ func (m stepModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
+		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
 	}
 
@@ -75,5 +103,5 @@ func (m stepModel) View() string {
 		return fmt.Sprintf("✓ %s\n", m.label)
 	}
 
-	return fmt.Sprintf("%s %s\n", m.spinner.View(), m.label)
+	return fmt.Sprintf("%s %s\n", m.spin.View(), m.label)
 }

@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/catielanier/portico/internal/portage"
+	"github.com/catielanier/portico/internal/ui"
 )
 
 const repositoryStaleAfter = 24 * time.Hour
@@ -15,71 +17,58 @@ func syncRepositoriesForMutation() error {
 		return err
 	}
 
-	repositoriesToSync := portage.RepositoriesNeedingSync(repositories, repositoryStaleAfter)
+	repositoriesToSync := dedupeRepositories(portage.RepositoriesNeedingSync(repositories, repositoryStaleAfter))
 	if len(repositoriesToSync) == 0 {
 		return nil
 	}
 
-	fmt.Println("Portico repository sync check:")
-	fmt.Println()
-
-	for _, repository := range repositoriesToSync {
-		if repository.NeverSynced {
-			fmt.Printf("  %s needs sync: repository has not been synced yet\n", repository.Name)
-			continue
-		}
-
-		if repository.LastSync != nil {
-			fmt.Printf("  %s needs sync: last sync was %s ago\n", repository.Name, formatDuration(time.Since(*repository.LastSync)))
-			continue
-		}
-
-		fmt.Printf("  %s needs sync\n", repository.Name)
-	}
-
-	fmt.Println()
-
 	syncer := portage.NewRepositorySyncer()
 
-	for _, repository := range repositoriesToSync {
-		fmt.Printf("Syncing %s...\n", repository.Name)
+	if err := prepareRepositorySyncer(syncer); err != nil {
+		return err
+	}
 
-		if err := syncer.Sync(repository.Name); err != nil {
+	for _, repository := range repositoriesToSync {
+		repository := repository
+
+		if err := ui.RunStepContext("Syncing "+repository.Name, func(ctx context.Context) error {
+			return syncer.SyncContext(ctx, repository.Name)
+		}); err != nil {
 			return err
 		}
 	}
 
-	fmt.Println()
 	return nil
 }
 
-func formatDuration(duration time.Duration) string {
-	if duration < time.Minute {
-		return "less than a minute"
+func prepareRepositorySyncer(syncer *portage.RepositorySyncer) error {
+	if !syncer.NeedsPrivilegeEscalation() {
+		return nil
 	}
 
-	if duration < time.Hour {
-		minutes := int(duration.Minutes())
-		if minutes == 1 {
-			return "1 minute"
+	fmt.Println("Portico needs sudo privileges to sync repositories.")
+	fmt.Println("You may be prompted for your password.")
+	fmt.Println()
+
+	return syncer.Authenticate()
+}
+
+func dedupeRepositories(repositories []portage.RepositoryStatus) []portage.RepositoryStatus {
+	seen := make(map[string]bool)
+	out := make([]portage.RepositoryStatus, 0, len(repositories))
+
+	for _, repository := range repositories {
+		if repository.Name == "" {
+			continue
 		}
 
-		return fmt.Sprintf("%d minutes", minutes)
-	}
-
-	if duration < 48*time.Hour {
-		hours := int(duration.Hours())
-		if hours == 1 {
-			return "1 hour"
+		if seen[repository.Name] {
+			continue
 		}
 
-		return fmt.Sprintf("%d hours", hours)
+		seen[repository.Name] = true
+		out = append(out, repository)
 	}
 
-	days := int(duration.Hours() / 24)
-	if days == 1 {
-		return "1 day"
-	}
-
-	return fmt.Sprintf("%d days", days)
+	return out
 }
