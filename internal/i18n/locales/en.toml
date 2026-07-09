@@ -87,3 +87,18 @@ other = "pretend overlays are not where the goblins keep their furniture"
 
 [joke.obs_poggers]
 other = "immediately make your stream totally poggers."
+
+[will_create_config_sandbox]
+other = "create a temporary Portage config sandbox"
+
+[will_write_sandbox_package_use]
+other = "write selected USE flags to the temporary package.use file"
+
+[will_show_portage_transaction]
+other = "show the calculated Portage transaction"
+
+[will_not_modify_real_portage_config]
+other = "modify real /etc/portage configuration in this prototype step"
+
+[will_not_run_emerge_ask_in_prototype]
+other = "run emerge --ask in this prototype step"
