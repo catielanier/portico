@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -27,6 +28,7 @@ var installCmd = &cobra.Command{
 		if err := syncRepositoriesForMutation(); err != nil {
 			return err
 		}
+
 		var sandbox *portage.ConfigSandbox
 
 		if err := ui.RunStep("Creating temporary Portage config sandbox", func() error {
@@ -83,16 +85,60 @@ var installCmd = &cobra.Command{
 			return err
 		}
 
+		transaction := (*portage.MergeTransaction)(nil)
+		if pretendResolution.Result != nil {
+			transaction = portage.ParseMergeTransaction(pretendResolution.Result.Raw)
+		}
+
 		renderInstallPrototype(
 			queryResult,
 			selected,
 			packageUsePath,
 			maskActions,
 			pretendResolution.RequiredUseChanges,
+			transaction,
 			pretendResolution.Result,
 			pretendResolution.Err,
 			t,
 		)
+
+		if pretendResolution.Err != nil {
+			return pretendResolution.Err
+		}
+
+		confirmed, err := confirmDefaultNo("Apply configuration and install this package?")
+		if err != nil {
+			return err
+		}
+
+		if !confirmed {
+			fmt.Println("Install cancelled.")
+			return nil
+		}
+
+		if err := ui.RunStep("Writing Portage configuration", func() error {
+			_, err := applyInstallConfigToSystem(
+				atom,
+				selectedFlags,
+				maskActions,
+				pretendResolution.RequiredUseChanges,
+			)
+			return err
+		}); err != nil {
+			return err
+		}
+
+		totalPackages := 0
+		if transaction != nil {
+			totalPackages = len(transaction.Packages)
+		}
+
+		if err := runPackageInstall(atom, totalPackages); err != nil {
+			return err
+		}
+
+		fmt.Println()
+		fmt.Println("Install complete.")
 
 		return nil
 	},
@@ -101,6 +147,16 @@ var installCmd = &cobra.Command{
 type InstallMaskActions struct {
 	AcceptKeywordsPath string
 	PackageLicensePath string
+	AcceptedKeyword    string
+	AcceptedLicenses   []string
+}
+
+type AppliedInstallConfig struct {
+	PackageUsePath     string
+	AcceptKeywordsPath string
+	PackageLicensePath string
+	SelectedFlags      []string
+	RequiredUseChanges []portage.RequiredUseChange
 	AcceptedKeyword    string
 	AcceptedLicenses   []string
 }
@@ -306,12 +362,100 @@ func resolvePretendAutounmaskInSandbox(atom string, sandbox *portage.ConfigSandb
 	return resolution, fmt.Errorf("emerge --pretend did not resolve after %d attempts", maxAttempts)
 }
 
+func applyInstallConfigToSystem(
+	atom string,
+	selectedFlags []string,
+	maskActions *InstallMaskActions,
+	requiredUseChanges []portage.RequiredUseChange,
+) (*AppliedInstallConfig, error) {
+	applied := &AppliedInstallConfig{
+		SelectedFlags:      selectedFlags,
+		RequiredUseChanges: requiredUseChanges,
+	}
+
+	if len(selectedFlags) > 0 {
+		path, err := portage.WritePackageUseEntry(
+			portage.SystemPortageConfigPath,
+			atom,
+			selectedFlags,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		applied.PackageUsePath = path
+	}
+
+	for _, change := range requiredUseChanges {
+		path, err := portage.WritePackageUseEntry(
+			portage.SystemPortageConfigPath,
+			change.Atom,
+			change.Flags,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		applied.PackageUsePath = path
+	}
+
+	if maskActions != nil && maskActions.AcceptedKeyword != "" {
+		path, err := portage.WriteAcceptKeywordEntry(
+			portage.SystemPortageConfigPath,
+			atom,
+			maskActions.AcceptedKeyword,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		applied.AcceptKeywordsPath = path
+		applied.AcceptedKeyword = maskActions.AcceptedKeyword
+	}
+
+	if maskActions != nil && len(maskActions.AcceptedLicenses) > 0 {
+		path, err := portage.WritePackageLicenseEntry(
+			portage.SystemPortageConfigPath,
+			atom,
+			maskActions.AcceptedLicenses,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		applied.PackageLicensePath = path
+		applied.AcceptedLicenses = maskActions.AcceptedLicenses
+	}
+
+	return applied, nil
+}
+
+func runPackageInstall(atom string, totalPackages int) error {
+	installer := portage.NewEmergeInstaller()
+
+	return ui.RunInstallProgress("Installing "+atom, totalPackages, func(ctx context.Context, events chan<- ui.InstallProgressEvent) error {
+		return installer.InstallContext(ctx, atom, totalPackages, func(progress portage.InstallProgress) {
+			event := ui.InstallProgressEvent{
+				CurrentPackage: progress.CurrentPackage,
+				CurrentIndex:   progress.CurrentIndex,
+				Total:          progress.Total,
+			}
+
+			select {
+			case events <- event:
+			case <-ctx.Done():
+			}
+		})
+	})
+}
+
 func renderInstallPrototype(
 	queryResult *portage.PackageQuery,
 	selections []useflags.FlagSelection,
 	packageUsePath string,
 	maskActions *InstallMaskActions,
 	requiredUseChanges []portage.RequiredUseChange,
+	transaction *portage.MergeTransaction,
 	pretendResult *portage.PretendResult,
 	pretendErr error,
 	t *i18n.Translator,
@@ -353,16 +497,7 @@ func renderInstallPrototype(
 				},
 			},
 			{
-				Key: "will_not_modify_real_portage_config",
-			},
-			{
 				Key: "will_not_overwrite_package_use",
-			},
-			{
-				Key: "will_not_run_emerge_ask_in_prototype",
-			},
-			{
-				Key: "will_not_install_in_prototype",
 			},
 			{
 				Key: jokes.RandomKey(jokes.Context{
@@ -404,28 +539,24 @@ func renderInstallPrototype(
 
 	fmt.Println()
 
-	if pretendResult != nil {
-		transaction := portage.ParseMergeTransaction(pretendResult.Raw)
+	if transaction != nil {
+		renderMergeTransaction(transaction)
+	}
 
-		if transaction != nil {
-			renderMergeTransaction(transaction)
-		}
+	if transaction == nil && pretendResult != nil && pretendResult.Raw != "" {
+		fmt.Println("emerge --pretend output:")
+		fmt.Println()
+		fmt.Print(pretendResult.Raw)
 
-		if transaction == nil && pretendResult.Raw != "" {
-			fmt.Println("emerge --pretend output:")
+		if !strings.HasSuffix(pretendResult.Raw, "\n") {
 			fmt.Println()
-			fmt.Print(pretendResult.Raw)
-
-			if !strings.HasSuffix(pretendResult.Raw, "\n") {
-				fmt.Println()
-			}
 		}
+	}
 
-		if transaction == nil && pretendResult.Raw == "" {
-			fmt.Println("emerge --pretend output:")
-			fmt.Println()
-			fmt.Println("  No output returned.")
-		}
+	if transaction == nil && pretendResult != nil && pretendResult.Raw == "" {
+		fmt.Println("emerge --pretend output:")
+		fmt.Println()
+		fmt.Println("  No output returned.")
 	}
 
 	if pretendErr != nil {
@@ -434,7 +565,7 @@ func renderInstallPrototype(
 	}
 
 	fmt.Println()
-	fmt.Print(ui.RenderPlan(p, t))
+	fmt.Print(ui.RenderPlanWithoutConfirmation(p, t))
 }
 
 func renderInstallMaskActions(atom string, actions *InstallMaskActions) {
