@@ -406,16 +406,25 @@ func renderInstallPrototype(
 	fmt.Println()
 
 	if pretendResult != nil {
-		fmt.Println("emerge --pretend output:")
-		fmt.Println()
+		transaction := portage.ParseMergeTransaction(pretendResult.Raw)
 
-		if pretendResult.Raw != "" {
+		if transaction != nil {
+			renderMergeTransaction(transaction)
+		}
+
+		if transaction == nil && pretendResult.Raw != "" {
+			fmt.Println("emerge --pretend output:")
+			fmt.Println()
 			fmt.Print(pretendResult.Raw)
 
 			if !strings.HasSuffix(pretendResult.Raw, "\n") {
 				fmt.Println()
 			}
-		} else {
+		}
+
+		if transaction == nil && pretendResult.Raw == "" {
+			fmt.Println("emerge --pretend output:")
+			fmt.Println()
 			fmt.Println("  No output returned.")
 		}
 	}
@@ -468,4 +477,59 @@ func renderRequiredUseChanges(changes []portage.RequiredUseChange) {
 			fmt.Printf("    required by: %s\n", requiredBy)
 		}
 	}
+}
+
+func renderMergeTransaction(transaction *portage.MergeTransaction) {
+	if transaction == nil {
+		return
+	}
+
+	atoms := transaction.PackageAtoms()
+
+	if len(atoms) > 0 {
+		fmt.Println("Dependencies to install:")
+		fmt.Println("  " + wrapCommaList(atoms, 2, 88))
+		fmt.Println()
+	}
+
+	if transaction.TotalLine != "" {
+		fmt.Println("Summary:")
+		fmt.Printf("  %s\n", transaction.TotalLine)
+	}
+}
+
+func wrapCommaList(items []string, indentLevel int, maxWidth int) string {
+	if len(items) == 0 {
+		return ""
+	}
+
+	indent := strings.Repeat("  ", indentLevel)
+	var b strings.Builder
+
+	lineLength := 0
+
+	for i, item := range items {
+		part := item
+		if i < len(items)-1 {
+			part += ","
+		}
+
+		if lineLength > 0 && lineLength+1+len(part) > maxWidth {
+			b.WriteString("\n")
+			b.WriteString(indent)
+			b.WriteString(part)
+			lineLength = len(indent) + len(part)
+			continue
+		}
+
+		if lineLength > 0 {
+			b.WriteString(" ")
+			lineLength++
+		}
+
+		b.WriteString(part)
+		lineLength += len(part)
+	}
+
+	return b.String()
 }
