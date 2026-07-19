@@ -15,15 +15,15 @@ import (
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install <atom>",
-	Short: "Configure USE flags and install a package",
-	Args:  cobra.MinimumNArgs(1),
+	Use:   "install <atom...>",
+	Short: "Configure USE flags and install one or more packages",
+	Args:  validateOneOrMoreAtomArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireRoot("install packages"); err != nil {
 			return err
 		}
 
-		atom := args[0]
+		atoms := cleanInstallArgs(args)
 
 		if err := syncRepositoriesForMutation(); err != nil {
 			return err
@@ -42,41 +42,54 @@ var installCmd = &cobra.Command{
 
 		maskActions := NewInstallMaskActions()
 
-		if err := resolveInitialInstallMasksInSandbox(atom, sandbox, maskActions); err != nil {
+		if err := resolveInitialInstallMasksInSandbox(atoms, sandbox, maskActions); err != nil {
 			return err
 		}
+
+		queryResults := make([]*portage.PackageQuery, 0, len(atoms))
+		selectedFlagsByAtom := make(map[string][]string)
+		selectionsByAtom := make(map[string][]useflags.FlagSelection)
+		packageUsePaths := make([]string, 0, len(atoms))
 
 		querier := portage.NewEqueryQuerier()
 
-		queryResult, err := querier.Query(atom)
-		if err != nil {
-			return err
+		for _, atom := range atoms {
+			queryResult, err := querier.Query(atom)
+			if err != nil {
+				return err
+			}
+
+			queryResults = append(queryResults, queryResult)
+
+			selections := useflags.FromQuery(queryResult)
+
+			selected, ok, err := ui.RunUsePicker(atom, selections)
+			if err != nil {
+				return err
+			}
+
+			if !ok {
+				fmt.Println("Install cancelled.")
+				return nil
+			}
+
+			selectedFlags := useflags.SelectedFlags(selected)
+
+			packageUsePath, err := portage.WritePackageUseEntry(
+				sandbox.PortageConfigPath,
+				atom,
+				selectedFlags,
+			)
+			if err != nil {
+				return err
+			}
+
+			selectedFlagsByAtom[atom] = selectedFlags
+			selectionsByAtom[atom] = selected
+			packageUsePaths = append(packageUsePaths, packageUsePath)
 		}
 
-		selections := useflags.FromQuery(queryResult)
-
-		selected, ok, err := ui.RunUsePicker(atom, selections)
-		if err != nil {
-			return err
-		}
-
-		if !ok {
-			fmt.Println("Install cancelled.")
-			return nil
-		}
-
-		selectedFlags := useflags.SelectedFlags(selected)
-
-		packageUsePath, err := portage.WritePackageUseEntry(
-			sandbox.PortageConfigPath,
-			atom,
-			selectedFlags,
-		)
-		if err != nil {
-			return err
-		}
-
-		pretendResolution, err := resolvePretendProblemsInSandbox(atom, sandbox, maskActions)
+		pretendResolution, err := resolvePretendProblemsInSandbox(atoms, sandbox, maskActions)
 		if err != nil {
 			return err
 		}
@@ -92,9 +105,11 @@ var installCmd = &cobra.Command{
 		}
 
 		renderInstallPrototype(
-			queryResult,
-			selected,
-			packageUsePath,
+			atoms,
+			queryResults,
+			selectionsByAtom,
+			selectedFlagsByAtom,
+			packageUsePaths,
 			maskActions,
 			pretendResolution.RequiredUseChanges,
 			transaction,
@@ -107,7 +122,7 @@ var installCmd = &cobra.Command{
 			return pretendResolution.Err
 		}
 
-		confirmed, err := confirmDefaultNo("Apply configuration and install this package?")
+		confirmed, err := confirmDefaultNo("Apply configuration and install these packages?")
 		if err != nil {
 			return err
 		}
@@ -119,8 +134,7 @@ var installCmd = &cobra.Command{
 
 		if err := ui.RunStep("Writing Portage configuration", func() error {
 			_, err := applyInstallConfigToSystem(
-				atom,
-				selectedFlags,
+				selectedFlagsByAtom,
 				maskActions,
 				pretendResolution.RequiredUseChanges,
 			)
@@ -134,7 +148,7 @@ var installCmd = &cobra.Command{
 			totalPackages = len(transaction.Packages)
 		}
 
-		if err := runPackageInstall(atom, totalPackages); err != nil {
+		if err := runPackageInstall(atoms, totalPackages); err != nil {
 			return err
 		}
 
@@ -167,13 +181,13 @@ type InstallMaskActions struct {
 }
 
 type AppliedInstallConfig struct {
-	PackageUsePath     string
-	AcceptKeywordsPath string
-	PackageLicensePath string
-	SelectedFlags      []string
-	RequiredUseChanges []portage.RequiredUseChange
-	KeywordEntries     []InstallKeywordEntry
-	LicenseEntries     []InstallLicenseEntry
+	PackageUsePath      string
+	AcceptKeywordsPath  string
+	PackageLicensePath  string
+	SelectedFlagsByAtom map[string][]string
+	RequiredUseChanges  []portage.RequiredUseChange
+	KeywordEntries      []InstallKeywordEntry
+	LicenseEntries      []InstallLicenseEntry
 }
 
 type PretendResolution struct {
@@ -191,40 +205,57 @@ func NewInstallMaskActions() *InstallMaskActions {
 	}
 }
 
-func resolveInitialInstallMasksInSandbox(atom string, sandbox *portage.ConfigSandbox, maskActions *InstallMaskActions) error {
-	var initialPretendResult *portage.PretendResult
-	var initialPretendErr error
+func resolveInitialInstallMasksInSandbox(
+	atoms []string,
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+) error {
+	const maxAttempts = 8
 
-	if err := ui.RunStep("Checking package availability", func() error {
-		initialPretendResult, initialPretendErr = portage.EmergePretendWithConfigRoot(atom, sandbox.Root)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		var initialPretendResult *portage.PretendResult
+		var initialPretendErr error
 
-		if initialPretendErr != nil && initialPretendResult == nil {
+		label := "Checking package availability"
+		if attempt > 1 {
+			label = fmt.Sprintf("Checking package availability retry %d", attempt)
+		}
+
+		if err := ui.RunStep(label, func() error {
+			initialPretendResult, initialPretendErr = portage.EmergePretendWithConfigRootForAtoms(atoms, sandbox.Root)
+
+			if initialPretendErr != nil && initialPretendResult == nil {
+				return initialPretendErr
+			}
+
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		if initialPretendErr == nil {
+			return nil
+		}
+
+		if initialPretendResult == nil {
 			return initialPretendErr
 		}
 
-		return nil
-	}); err != nil {
-		return err
+		maskReport := portage.ParseMaskedPackageReport("", initialPretendResult.Raw)
+		if maskReport == nil {
+			return nil
+		}
+
+		if err := applyMaskedPackageReportInSandbox(maskReport, sandbox, maskActions, initialPretendErr); err != nil {
+			return err
+		}
 	}
 
-	if initialPretendErr == nil {
-		return nil
-	}
-
-	if initialPretendResult == nil {
-		return initialPretendErr
-	}
-
-	maskReport := portage.ParseMaskedPackageReport(atom, initialPretendResult.Raw)
-	if maskReport == nil {
-		return nil
-	}
-
-	return applyMaskedPackageReportInSandbox(maskReport, sandbox, maskActions, initialPretendErr)
+	return fmt.Errorf("package availability did not resolve after %d attempts", maxAttempts)
 }
 
 func resolvePretendProblemsInSandbox(
-	atom string,
+	atoms []string,
 	sandbox *portage.ConfigSandbox,
 	maskActions *InstallMaskActions,
 ) (*PretendResolution, error) {
@@ -242,7 +273,7 @@ func resolvePretendProblemsInSandbox(
 		}
 
 		if err := ui.RunStep(label, func() error {
-			pretendResult, pretendErr = portage.EmergePretendWithConfigRoot(atom, sandbox.Root)
+			pretendResult, pretendErr = portage.EmergePretendWithConfigRootForAtoms(atoms, sandbox.Root)
 
 			if pretendErr != nil && pretendResult == nil {
 				return pretendErr
@@ -515,17 +546,20 @@ func cleanStringList(values []string) []string {
 }
 
 func applyInstallConfigToSystem(
-	atom string,
-	selectedFlags []string,
+	selectedFlagsByAtom map[string][]string,
 	maskActions *InstallMaskActions,
 	requiredUseChanges []portage.RequiredUseChange,
 ) (*AppliedInstallConfig, error) {
 	applied := &AppliedInstallConfig{
-		SelectedFlags:      selectedFlags,
-		RequiredUseChanges: requiredUseChanges,
+		SelectedFlagsByAtom: selectedFlagsByAtom,
+		RequiredUseChanges:  requiredUseChanges,
 	}
 
-	if len(selectedFlags) > 0 {
+	for atom, selectedFlags := range selectedFlagsByAtom {
+		if len(selectedFlags) == 0 {
+			continue
+		}
+
 		path, err := portage.WritePackageUseEntry(
 			portage.SystemPortageConfigPath,
 			atom,
@@ -592,11 +626,13 @@ func applyInstallConfigToSystem(
 	return applied, nil
 }
 
-func runPackageInstall(atom string, totalPackages int) error {
+func runPackageInstall(atoms []string, totalPackages int) error {
 	installer := portage.NewEmergeInstaller()
 
-	return ui.RunInstallProgress("Installing "+atom, totalPackages, func(ctx context.Context, events chan<- ui.InstallProgressEvent) error {
-		return installer.InstallContext(ctx, atom, totalPackages, func(progress portage.InstallProgress) {
+	label := "Installing " + strings.Join(atoms, " ")
+
+	return ui.RunInstallProgress(label, totalPackages, func(ctx context.Context, events chan<- ui.InstallProgressEvent) error {
+		return installer.InstallAtomsContext(ctx, atoms, totalPackages, func(progress portage.InstallProgress) {
 			event := ui.InstallProgressEvent{
 				CurrentPackage: progress.CurrentPackage,
 				CurrentIndex:   progress.CurrentIndex,
@@ -612,9 +648,11 @@ func runPackageInstall(atom string, totalPackages int) error {
 }
 
 func renderInstallPrototype(
-	queryResult *portage.PackageQuery,
-	selections []useflags.FlagSelection,
-	packageUsePath string,
+	atoms []string,
+	queryResults []*portage.PackageQuery,
+	selectionsByAtom map[string][]useflags.FlagSelection,
+	selectedFlagsByAtom map[string][]string,
+	packageUsePaths []string,
 	maskActions *InstallMaskActions,
 	requiredUseChanges []portage.RequiredUseChange,
 	transaction *portage.MergeTransaction,
@@ -622,17 +660,16 @@ func renderInstallPrototype(
 	pretendErr error,
 	t *i18n.Translator,
 ) {
-	atom := queryResult.Atom
-	selectedFlags := useflags.SelectedFlags(selections)
+	action := "Install " + strings.Join(atoms, " ")
 
 	p := plan.Plan{
 		TitleKey: "plan_title",
-		Action:   "Install " + atom,
+		Action:   action,
 		Will: []plan.Item{
 			{
 				Key: "will_inspect_use_flags",
 				Data: map[string]any{
-					"Atom": atom,
+					"Atom": strings.Join(atoms, " "),
 				},
 			},
 			{
@@ -644,7 +681,7 @@ func renderInstallPrototype(
 			{
 				Key: "will_run_emerge_pretend",
 				Data: map[string]any{
-					"Atom": atom,
+					"Atom": strings.Join(atoms, " "),
 				},
 			},
 			{
@@ -663,7 +700,7 @@ func renderInstallPrototype(
 			},
 			{
 				Key: jokes.RandomKey(jokes.Context{
-					Atom:    atom,
+					Atom:    atoms[0],
 					Command: "install",
 				}),
 			},
@@ -672,27 +709,45 @@ func renderInstallPrototype(
 
 	fmt.Println("Portico Install")
 	fmt.Println()
-	fmt.Println("Package:")
-	fmt.Printf("  %s\n", atom)
-	fmt.Println()
+	fmt.Println("Packages:")
 
-	renderUseFlagSummary(queryResult)
+	for _, atom := range atoms {
+		fmt.Printf("  %s\n", atom)
+	}
+
+	for _, queryResult := range queryResults {
+		fmt.Println()
+		renderUseFlagSummary(queryResult)
+	}
+
 	renderInstallMaskActions(maskActions)
 	renderRequiredUseChanges(requiredUseChanges)
 
 	fmt.Println()
-	fmt.Println("Selected package.use entry:")
+	fmt.Println("Selected package.use entries:")
 
-	if len(selectedFlags) > 0 {
+	hasSelectedFlags := false
+	for _, atom := range atoms {
+		selectedFlags := selectedFlagsByAtom[atom]
+		if len(selectedFlags) == 0 {
+			continue
+		}
+
+		hasSelectedFlags = true
 		fmt.Printf("  %s %s\n", atom, strings.Join(selectedFlags, " "))
-	} else {
+	}
+
+	if !hasSelectedFlags {
 		fmt.Println("  No explicit USE flag changes selected.")
 	}
 
-	if packageUsePath != "" {
+	if len(packageUsePaths) > 0 {
 		fmt.Println()
-		fmt.Println("Sandbox package.use path:")
-		fmt.Printf("  %s\n", packageUsePath)
+		fmt.Println("Sandbox package.use paths:")
+
+		for _, path := range dedupeStrings(packageUsePaths) {
+			fmt.Printf("  %s\n", path)
+		}
 	}
 
 	fmt.Println()
@@ -724,6 +779,8 @@ func renderInstallPrototype(
 
 	fmt.Println()
 	fmt.Print(ui.RenderPlanWithoutConfirmation(p, t))
+
+	_ = selectionsByAtom
 }
 
 func renderInstallMaskActions(actions *InstallMaskActions) {
@@ -830,4 +887,46 @@ func wrapCommaList(items []string, indentLevel int, maxWidth int) string {
 	}
 
 	return b.String()
+}
+
+func cleanInstallArgs(args []string) []string {
+	var out []string
+	seen := make(map[string]bool)
+
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if arg == "" {
+			continue
+		}
+
+		if seen[arg] {
+			continue
+		}
+
+		seen[arg] = true
+		out = append(out, arg)
+	}
+
+	return out
+}
+
+func dedupeStrings(values []string) []string {
+	var out []string
+	seen := make(map[string]bool)
+
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+
+		if seen[value] {
+			continue
+		}
+
+		seen[value] = true
+		out = append(out, value)
+	}
+
+	return out
 }

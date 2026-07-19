@@ -29,18 +29,26 @@ func (i *EmergeInstaller) InstallContext(
 	expectedTotal int,
 	onProgress func(InstallProgress),
 ) error {
-	atom = strings.TrimSpace(atom)
-	if atom == "" {
-		return fmt.Errorf("atom cannot be empty")
+	return i.InstallAtomsContext(ctx, []string{atom}, expectedTotal, onProgress)
+}
+
+func (i *EmergeInstaller) InstallAtomsContext(
+	ctx context.Context,
+	atoms []string,
+	expectedTotal int,
+	onProgress func(InstallProgress),
+) error {
+	cleanAtoms := cleanInstallAtoms(atoms)
+	if len(cleanAtoms) == 0 {
+		return fmt.Errorf("at least one atom is required")
 	}
 
-	cmd := exec.CommandContext(
-		ctx,
-		"emerge",
+	args := append([]string{
 		"--verbose",
 		"--quiet-build=y",
-		atom,
-	)
+	}, cleanAtoms...)
+
+	cmd := exec.CommandContext(ctx, "emerge", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -138,9 +146,6 @@ func scanEmergeInstallOutput(
 func parseEmergeInstallProgress(line string, expectedTotal int) (InstallProgress, bool) {
 	line = strings.TrimSpace(line)
 
-	// Examples:
-	// >>> Emerging (1 of 168) x11-base/xorg-proto-2025.1-1::gentoo
-	// >>> Installing (1 of 168) x11-base/xorg-proto-2025.1-1::gentoo
 	progressPattern := regexp.MustCompile(`^>>>\s+(?:Emerging|Installing)\s+\((\d+)\s+of\s+(\d+)\)\s+(.+?)\s*$`)
 
 	matches := progressPattern.FindStringSubmatch(line)
@@ -183,4 +188,25 @@ func displayPackageFromEmergeToken(token string) string {
 	}
 
 	return token
+}
+
+func cleanInstallAtoms(atoms []string) []string {
+	var out []string
+	seen := make(map[string]bool)
+
+	for _, atom := range atoms {
+		atom = strings.TrimSpace(atom)
+		if atom == "" {
+			continue
+		}
+
+		if seen[atom] {
+			continue
+		}
+
+		seen[atom] = true
+		out = append(out, atom)
+	}
+
+	return out
 }

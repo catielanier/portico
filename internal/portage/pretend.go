@@ -9,6 +9,7 @@ import (
 )
 
 type PretendResult struct {
+	Atoms  []string
 	Atom   string
 	Raw    string
 	Stdout string
@@ -16,12 +17,18 @@ type PretendResult struct {
 }
 
 func EmergePretendWithConfigRoot(atom string, configRoot string) (*PretendResult, error) {
-	atom = strings.TrimSpace(atom)
-	if atom == "" {
-		return nil, fmt.Errorf("atom cannot be empty")
+	return EmergePretendWithConfigRootForAtoms([]string{atom}, configRoot)
+}
+
+func EmergePretendWithConfigRootForAtoms(atoms []string, configRoot string) (*PretendResult, error) {
+	cleanAtoms := cleanAtoms(atoms)
+	if len(cleanAtoms) == 0 {
+		return nil, fmt.Errorf("at least one atom is required")
 	}
 
-	cmd := exec.Command("emerge", "--pretend", "--verbose", atom)
+	args := append([]string{"--pretend", "--verbose"}, cleanAtoms...)
+
+	cmd := exec.Command("emerge", args...)
 
 	cmd.Env = append(os.Environ(),
 		"PORTAGE_CONFIGROOT="+configRoot,
@@ -36,7 +43,8 @@ func EmergePretendWithConfigRoot(atom string, configRoot string) (*PretendResult
 	err := cmd.Run()
 
 	result := &PretendResult{
-		Atom:   atom,
+		Atoms:  cleanAtoms,
+		Atom:   cleanAtoms[0],
 		Stdout: stdout.String(),
 		Stderr: stderr.String(),
 		Raw:    stdout.String() + stderr.String(),
@@ -51,4 +59,25 @@ func EmergePretendWithConfigRoot(atom string, configRoot string) (*PretendResult
 	}
 
 	return result, nil
+}
+
+func cleanAtoms(atoms []string) []string {
+	var out []string
+	seen := make(map[string]bool)
+
+	for _, atom := range atoms {
+		atom = strings.TrimSpace(atom)
+		if atom == "" {
+			continue
+		}
+
+		if seen[atom] {
+			continue
+		}
+
+		seen[atom] = true
+		out = append(out, atom)
+	}
+
+	return out
 }
