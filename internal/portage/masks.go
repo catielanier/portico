@@ -36,9 +36,15 @@ func ParseMaskedPackageReport(requestedAtom string, raw string) *MaskedPackageRe
 		return nil
 	}
 
+	requestedAtom = strings.TrimSpace(requestedAtom)
+	if requestedAtom == "" {
+		requestedAtom = extractRequestedAtomFromMaskedReport(raw)
+	}
+
 	lines := strings.Split(raw, "\n")
 
-	// Example:
+	// Examples:
+	// !!! All ebuilds that could satisfy "media-video/obs-studio" have been masked.
 	// - media-video/obs-studio-32.1.2::gentoo (masked by: ~amd64 keyword)
 	// - app-example/foo-1.0::gentoo (masked by: GPL-3 license)
 	// - app-example/foo-1.0::gentoo (masked by: ~amd64 keyword, GPL-3 license)
@@ -64,7 +70,7 @@ func ParseMaskedPackageReport(requestedAtom string, raw string) *MaskedPackageRe
 			Version:    version,
 			Repository: repository,
 			RawReason:  rawReason,
-			Live:       strings.Contains(version, "9999"),
+			Live:       strings.Contains(version, "9999") || strings.HasSuffix(fullAtomWithVersion, "-9999"),
 			Raw:        line,
 		}
 
@@ -80,6 +86,16 @@ func ParseMaskedPackageReport(requestedAtom string, raw string) *MaskedPackageRe
 	}
 
 	return report
+}
+
+func extractRequestedAtomFromMaskedReport(raw string) string {
+	pattern := regexp.MustCompile(`All ebuilds that could satisfy\s+"([^"]+)"\s+have been masked`)
+	matches := pattern.FindStringSubmatch(raw)
+	if matches == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(matches[1])
 }
 
 func classifyMaskReasons(reason string) []MaskReason {

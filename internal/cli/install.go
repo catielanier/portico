@@ -17,7 +17,7 @@ import (
 var installCmd = &cobra.Command{
 	Use:   "install <atom>",
 	Short: "Configure USE flags and install a package",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireRoot("install packages"); err != nil {
 			return err
@@ -40,8 +40,9 @@ var installCmd = &cobra.Command{
 		}
 		defer sandbox.Cleanup()
 
-		maskActions, err := resolveInstallMasksInSandbox(atom, sandbox)
-		if err != nil {
+		maskActions := NewInstallMaskActions()
+
+		if err := resolveInitialInstallMasksInSandbox(atom, sandbox, maskActions); err != nil {
 			return err
 		}
 
@@ -75,7 +76,7 @@ var installCmd = &cobra.Command{
 			return err
 		}
 
-		pretendResolution, err := resolvePretendAutounmaskInSandbox(atom, sandbox)
+		pretendResolution, err := resolvePretendProblemsInSandbox(atom, sandbox, maskActions)
 		if err != nil {
 			return err
 		}
@@ -144,11 +145,25 @@ var installCmd = &cobra.Command{
 	},
 }
 
+type InstallKeywordEntry struct {
+	Atom    string
+	Keyword string
+	Path    string
+}
+
+type InstallLicenseEntry struct {
+	Atom     string
+	Licenses []string
+	Path     string
+}
+
 type InstallMaskActions struct {
-	AcceptKeywordsPath string
-	PackageLicensePath string
-	AcceptedKeyword    string
-	AcceptedLicenses   []string
+	AcceptedKeywords map[string]bool
+	AcceptedLicenses map[string]bool
+	KeywordEntries   []InstallKeywordEntry
+	LicenseEntries   []InstallLicenseEntry
+	writtenKeywords  map[string]bool
+	writtenLicenses  map[string]bool
 }
 
 type AppliedInstallConfig struct {
@@ -157,8 +172,8 @@ type AppliedInstallConfig struct {
 	PackageLicensePath string
 	SelectedFlags      []string
 	RequiredUseChanges []portage.RequiredUseChange
-	AcceptedKeyword    string
-	AcceptedLicenses   []string
+	KeywordEntries     []InstallKeywordEntry
+	LicenseEntries     []InstallLicenseEntry
 }
 
 type PretendResolution struct {
@@ -167,7 +182,16 @@ type PretendResolution struct {
 	RequiredUseChanges []portage.RequiredUseChange
 }
 
-func resolveInstallMasksInSandbox(atom string, sandbox *portage.ConfigSandbox) (*InstallMaskActions, error) {
+func NewInstallMaskActions() *InstallMaskActions {
+	return &InstallMaskActions{
+		AcceptedKeywords: make(map[string]bool),
+		AcceptedLicenses: make(map[string]bool),
+		writtenKeywords:  make(map[string]bool),
+		writtenLicenses:  make(map[string]bool),
+	}
+}
+
+func resolveInitialInstallMasksInSandbox(atom string, sandbox *portage.ConfigSandbox, maskActions *InstallMaskActions) error {
 	var initialPretendResult *portage.PretendResult
 	var initialPretendErr error
 
@@ -180,117 +204,31 @@ func resolveInstallMasksInSandbox(atom string, sandbox *portage.ConfigSandbox) (
 
 		return nil
 	}); err != nil {
-		return nil, err
+		return err
 	}
 
 	if initialPretendErr == nil {
-		return &InstallMaskActions{}, nil
+		return nil
 	}
 
 	if initialPretendResult == nil {
-		return &InstallMaskActions{}, initialPretendErr
+		return initialPretendErr
 	}
 
 	maskReport := portage.ParseMaskedPackageReport(atom, initialPretendResult.Raw)
 	if maskReport == nil {
-		return &InstallMaskActions{}, nil
+		return nil
 	}
 
-	candidate := portage.BestMaskedCandidate(maskReport)
-	if candidate == nil {
-		return nil, initialPretendErr
-	}
-
-	fmt.Println()
-	fmt.Println("Portico detected that this package is masked.")
-	fmt.Println()
-	fmt.Println("Best candidate:")
-	fmt.Printf("  %s::%s\n", candidate.Atom, candidate.Repository)
-	fmt.Printf("  masked by: %s\n", candidate.RawReason)
-	fmt.Println()
-
-	if candidate.HasUnsupportedReasons() {
-		fmt.Println("Portico does not automate this mask type yet.")
-		fmt.Println()
-		fmt.Print(initialPretendResult.Raw)
-		return nil, initialPretendErr
-	}
-
-	actions := &InstallMaskActions{}
-
-	if candidate.HasReason(portage.MaskReasonTestingKeyword) {
-		keyword := candidate.RequiredKeyword
-		if keyword == "" {
-			keyword = "~amd64"
-		}
-
-		fmt.Println("Portico can allow this specific package keyword in the sandbox:")
-		fmt.Printf("  %s %s\n", atom, keyword)
-		fmt.Println()
-
-		confirmed, err := confirmDefaultNo("Allow this package keyword in the sandbox?")
-		if err != nil {
-			return nil, err
-		}
-
-		if !confirmed {
-			fmt.Println("Install cancelled.")
-			return nil, fmt.Errorf("package keyword was not accepted")
-		}
-
-		path, err := portage.WriteAcceptKeywordEntry(
-			sandbox.PortageConfigPath,
-			atom,
-			keyword,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		actions.AcceptKeywordsPath = path
-		actions.AcceptedKeyword = keyword
-	}
-
-	if candidate.HasReason(portage.MaskReasonLicense) {
-		if len(candidate.RequiredLicenses) == 0 {
-			fmt.Println("Portico detected a license mask, but could not determine the required license tokens.")
-			fmt.Println()
-			fmt.Print(initialPretendResult.Raw)
-			return nil, initialPretendErr
-		}
-
-		fmt.Println("Portico can accept these licenses for this specific package in the sandbox:")
-		fmt.Printf("  %s %s\n", atom, strings.Join(candidate.RequiredLicenses, " "))
-		fmt.Println()
-
-		confirmed, err := confirmDefaultNo("Accept these licenses for this package in the sandbox?")
-		if err != nil {
-			return nil, err
-		}
-
-		if !confirmed {
-			fmt.Println("Install cancelled.")
-			return nil, fmt.Errorf("package license was not accepted")
-		}
-
-		path, err := portage.WritePackageLicenseEntry(
-			sandbox.PortageConfigPath,
-			atom,
-			candidate.RequiredLicenses,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		actions.PackageLicensePath = path
-		actions.AcceptedLicenses = candidate.RequiredLicenses
-	}
-
-	return actions, nil
+	return applyMaskedPackageReportInSandbox(maskReport, sandbox, maskActions, initialPretendErr)
 }
 
-func resolvePretendAutounmaskInSandbox(atom string, sandbox *portage.ConfigSandbox) (*PretendResolution, error) {
-	const maxAttempts = 5
+func resolvePretendProblemsInSandbox(
+	atom string,
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+) (*PretendResolution, error) {
+	const maxAttempts = 8
 
 	resolution := &PretendResolution{}
 
@@ -326,40 +264,254 @@ func resolvePretendAutounmaskInSandbox(atom string, sandbox *portage.ConfigSandb
 			return resolution, nil
 		}
 
-		report := portage.ParseAutounmaskReport(pretendResult.Raw)
-		if report == nil || len(report.RequiredUseChanges) == 0 {
-			return resolution, nil
-		}
+		useReport := portage.ParseAutounmaskReport(pretendResult.Raw)
+		if useReport != nil && len(useReport.RequiredUseChanges) > 0 {
+			fmt.Println()
+			fmt.Println("Portage requires additional USE changes to proceed:")
+			fmt.Println()
 
-		fmt.Println()
-		fmt.Println("Portage requires additional USE changes to proceed:")
-		fmt.Println()
+			for _, change := range useReport.RequiredUseChanges {
+				fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
 
-		for _, change := range report.RequiredUseChanges {
-			fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
-
-			for _, requiredBy := range change.RequiredBy {
-				fmt.Printf("    required by: %s\n", requiredBy)
+				for _, requiredBy := range change.RequiredBy {
+					fmt.Printf("    required by: %s\n", requiredBy)
+				}
 			}
+
+			fmt.Println()
+			fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
+
+			for _, change := range useReport.RequiredUseChanges {
+				if _, err := portage.WritePackageUseEntry(
+					sandbox.PortageConfigPath,
+					change.Atom,
+					change.Flags,
+				); err != nil {
+					return nil, err
+				}
+
+				resolution.RequiredUseChanges = append(resolution.RequiredUseChanges, change)
+			}
+
+			continue
 		}
 
-		fmt.Println()
-		fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
-
-		for _, change := range report.RequiredUseChanges {
-			if _, err := portage.WritePackageUseEntry(
-				sandbox.PortageConfigPath,
-				change.Atom,
-				change.Flags,
-			); err != nil {
+		maskReport := portage.ParseMaskedPackageReport("", pretendResult.Raw)
+		if maskReport != nil {
+			if err := applyMaskedPackageReportInSandbox(maskReport, sandbox, maskActions, pretendErr); err != nil {
 				return nil, err
 			}
 
-			resolution.RequiredUseChanges = append(resolution.RequiredUseChanges, change)
+			continue
 		}
+
+		return resolution, nil
 	}
 
 	return resolution, fmt.Errorf("emerge --pretend did not resolve after %d attempts", maxAttempts)
+}
+
+func applyMaskedPackageReportInSandbox(
+	report *portage.MaskedPackageReport,
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+	originalErr error,
+) error {
+	if report == nil {
+		return nil
+	}
+
+	candidate := portage.BestMaskedCandidate(report)
+	if candidate == nil {
+		return originalErr
+	}
+
+	requestedAtom := strings.TrimSpace(report.RequestedAtom)
+	if requestedAtom == "" {
+		requestedAtom = candidate.Atom
+	}
+
+	fmt.Println()
+	fmt.Println("Portico detected that a package in this transaction is masked.")
+	fmt.Println()
+	fmt.Println("Best candidate:")
+	fmt.Printf("  %s::%s\n", candidate.Atom, candidate.Repository)
+	fmt.Printf("  masked by: %s\n", candidate.RawReason)
+	fmt.Println()
+
+	if candidate.HasUnsupportedReasons() {
+		fmt.Println("Portico does not automate this mask type yet.")
+		return originalErr
+	}
+
+	if candidate.HasReason(portage.MaskReasonTestingKeyword) {
+		keyword := candidate.RequiredKeyword
+		if keyword == "" {
+			keyword = "~amd64"
+		}
+
+		if !maskActions.AcceptedKeywords[keyword] {
+			fmt.Println("Portico can allow this keyword for packages required by this transaction:")
+			fmt.Printf("  %s\n", keyword)
+			fmt.Println()
+
+			confirmed, err := confirmDefaultNo("Allow this keyword for this transaction?")
+			if err != nil {
+				return err
+			}
+
+			if !confirmed {
+				fmt.Println("Install cancelled.")
+				return fmt.Errorf("package keyword was not accepted")
+			}
+
+			maskActions.AcceptedKeywords[keyword] = true
+		} else {
+			fmt.Printf("Portico already has permission to apply keyword %s in this transaction.\n", keyword)
+		}
+
+		if err := writeKeywordMaskEntryInSandbox(sandbox, maskActions, requestedAtom, keyword); err != nil {
+			return err
+		}
+	}
+
+	if candidate.HasReason(portage.MaskReasonLicense) {
+		if len(candidate.RequiredLicenses) == 0 {
+			fmt.Println("Portico detected a license mask, but could not determine the required license tokens.")
+			return originalErr
+		}
+
+		newLicenses := newLicenseTokens(maskActions, candidate.RequiredLicenses)
+		if len(newLicenses) > 0 {
+			fmt.Println("Portico can accept these licenses for packages required by this transaction:")
+			fmt.Printf("  %s\n", strings.Join(newLicenses, " "))
+			fmt.Println()
+
+			confirmed, err := confirmDefaultNo("Accept these licenses for this transaction?")
+			if err != nil {
+				return err
+			}
+
+			if !confirmed {
+				fmt.Println("Install cancelled.")
+				return fmt.Errorf("package license was not accepted")
+			}
+
+			for _, license := range newLicenses {
+				maskActions.AcceptedLicenses[license] = true
+			}
+		} else {
+			fmt.Println("Portico already has permission to apply these license tokens in this transaction.")
+		}
+
+		if err := writeLicenseMaskEntryInSandbox(sandbox, maskActions, requestedAtom, candidate.RequiredLicenses); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeKeywordMaskEntryInSandbox(
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+	atom string,
+	keyword string,
+) error {
+	key := atom + " " + keyword
+	if maskActions.writtenKeywords[key] {
+		return nil
+	}
+
+	path, err := portage.WriteAcceptKeywordEntry(
+		sandbox.PortageConfigPath,
+		atom,
+		keyword,
+	)
+	if err != nil {
+		return err
+	}
+
+	maskActions.writtenKeywords[key] = true
+	maskActions.KeywordEntries = append(maskActions.KeywordEntries, InstallKeywordEntry{
+		Atom:    atom,
+		Keyword: keyword,
+		Path:    path,
+	})
+
+	return nil
+}
+
+func writeLicenseMaskEntryInSandbox(
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+	atom string,
+	licenses []string,
+) error {
+	cleanedLicenses := cleanStringList(licenses)
+	if len(cleanedLicenses) == 0 {
+		return nil
+	}
+
+	key := atom + " " + strings.Join(cleanedLicenses, " ")
+	if maskActions.writtenLicenses[key] {
+		return nil
+	}
+
+	path, err := portage.WritePackageLicenseEntry(
+		sandbox.PortageConfigPath,
+		atom,
+		cleanedLicenses,
+	)
+	if err != nil {
+		return err
+	}
+
+	maskActions.writtenLicenses[key] = true
+	maskActions.LicenseEntries = append(maskActions.LicenseEntries, InstallLicenseEntry{
+		Atom:     atom,
+		Licenses: cleanedLicenses,
+		Path:     path,
+	})
+
+	return nil
+}
+
+func newLicenseTokens(maskActions *InstallMaskActions, licenses []string) []string {
+	var out []string
+
+	for _, license := range cleanStringList(licenses) {
+		if maskActions.AcceptedLicenses[license] {
+			continue
+		}
+
+		out = append(out, license)
+	}
+
+	return out
+}
+
+func cleanStringList(values []string) []string {
+	var out []string
+	seen := make(map[string]bool)
+
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		value = strings.Trim(value, ",")
+
+		if value == "" {
+			continue
+		}
+
+		if seen[value] {
+			continue
+		}
+
+		seen[value] = true
+		out = append(out, value)
+	}
+
+	return out
 }
 
 func applyInstallConfigToSystem(
@@ -399,32 +551,42 @@ func applyInstallConfigToSystem(
 		applied.PackageUsePath = path
 	}
 
-	if maskActions != nil && maskActions.AcceptedKeyword != "" {
-		path, err := portage.WriteAcceptKeywordEntry(
-			portage.SystemPortageConfigPath,
-			atom,
-			maskActions.AcceptedKeyword,
-		)
-		if err != nil {
-			return nil, err
+	if maskActions != nil {
+		for _, entry := range maskActions.KeywordEntries {
+			path, err := portage.WriteAcceptKeywordEntry(
+				portage.SystemPortageConfigPath,
+				entry.Atom,
+				entry.Keyword,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			applied.AcceptKeywordsPath = path
+			applied.KeywordEntries = append(applied.KeywordEntries, InstallKeywordEntry{
+				Atom:    entry.Atom,
+				Keyword: entry.Keyword,
+				Path:    path,
+			})
 		}
 
-		applied.AcceptKeywordsPath = path
-		applied.AcceptedKeyword = maskActions.AcceptedKeyword
-	}
+		for _, entry := range maskActions.LicenseEntries {
+			path, err := portage.WritePackageLicenseEntry(
+				portage.SystemPortageConfigPath,
+				entry.Atom,
+				entry.Licenses,
+			)
+			if err != nil {
+				return nil, err
+			}
 
-	if maskActions != nil && len(maskActions.AcceptedLicenses) > 0 {
-		path, err := portage.WritePackageLicenseEntry(
-			portage.SystemPortageConfigPath,
-			atom,
-			maskActions.AcceptedLicenses,
-		)
-		if err != nil {
-			return nil, err
+			applied.PackageLicensePath = path
+			applied.LicenseEntries = append(applied.LicenseEntries, InstallLicenseEntry{
+				Atom:     entry.Atom,
+				Licenses: entry.Licenses,
+				Path:     path,
+			})
 		}
-
-		applied.PackageLicensePath = path
-		applied.AcceptedLicenses = maskActions.AcceptedLicenses
 	}
 
 	return applied, nil
@@ -515,11 +677,7 @@ func renderInstallPrototype(
 	fmt.Println()
 
 	renderUseFlagSummary(queryResult)
-
-	if maskActions != nil {
-		renderInstallMaskActions(atom, maskActions)
-	}
-
+	renderInstallMaskActions(maskActions)
 	renderRequiredUseChanges(requiredUseChanges)
 
 	fmt.Println()
@@ -568,26 +726,36 @@ func renderInstallPrototype(
 	fmt.Print(ui.RenderPlanWithoutConfirmation(p, t))
 }
 
-func renderInstallMaskActions(atom string, actions *InstallMaskActions) {
-	if actions.AcceptedKeyword != "" {
-		fmt.Println()
-		fmt.Println("Sandbox package.accept_keywords entry:")
-		fmt.Printf("  %s %s\n", atom, actions.AcceptedKeyword)
+func renderInstallMaskActions(actions *InstallMaskActions) {
+	if actions == nil {
+		return
+	}
 
-		if actions.AcceptKeywordsPath != "" {
+	if len(actions.KeywordEntries) > 0 {
+		fmt.Println()
+		fmt.Println("Sandbox package.accept_keywords entries:")
+
+		for _, entry := range actions.KeywordEntries {
+			fmt.Printf("  %s %s\n", entry.Atom, entry.Keyword)
+		}
+
+		if actions.KeywordEntries[0].Path != "" {
 			fmt.Println("Sandbox package.accept_keywords path:")
-			fmt.Printf("  %s\n", actions.AcceptKeywordsPath)
+			fmt.Printf("  %s\n", actions.KeywordEntries[0].Path)
 		}
 	}
 
-	if len(actions.AcceptedLicenses) > 0 {
+	if len(actions.LicenseEntries) > 0 {
 		fmt.Println()
-		fmt.Println("Sandbox package.license entry:")
-		fmt.Printf("  %s %s\n", atom, strings.Join(actions.AcceptedLicenses, " "))
+		fmt.Println("Sandbox package.license entries:")
 
-		if actions.PackageLicensePath != "" {
+		for _, entry := range actions.LicenseEntries {
+			fmt.Printf("  %s %s\n", entry.Atom, strings.Join(entry.Licenses, " "))
+		}
+
+		if actions.LicenseEntries[0].Path != "" {
 			fmt.Println("Sandbox package.license path:")
-			fmt.Printf("  %s\n", actions.PackageLicensePath)
+			fmt.Printf("  %s\n", actions.LicenseEntries[0].Path)
 		}
 	}
 }
