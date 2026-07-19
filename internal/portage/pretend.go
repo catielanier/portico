@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+type PretendOptions struct {
+	OneShot bool
+}
+
 type PretendResult struct {
 	Atoms  []string
 	Atom   string
@@ -21,12 +25,35 @@ func EmergePretendWithConfigRoot(atom string, configRoot string) (*PretendResult
 }
 
 func EmergePretendWithConfigRootForAtoms(atoms []string, configRoot string) (*PretendResult, error) {
+	return EmergePretendWithConfigRootForAtomsWithOptions(atoms, configRoot, PretendOptions{})
+}
+
+func EmergePretendOneshotWithConfigRootForAtoms(atoms []string, configRoot string) (*PretendResult, error) {
+	return EmergePretendWithConfigRootForAtomsWithOptions(atoms, configRoot, PretendOptions{
+		OneShot: true,
+	})
+}
+
+func EmergePretendWithConfigRootForAtomsWithOptions(
+	atoms []string,
+	configRoot string,
+	options PretendOptions,
+) (*PretendResult, error) {
 	cleanAtoms := cleanAtoms(atoms)
 	if len(cleanAtoms) == 0 {
 		return nil, fmt.Errorf("at least one atom is required")
 	}
 
-	args := append([]string{"--pretend", "--verbose"}, cleanAtoms...)
+	args := []string{
+		"--pretend",
+		"--verbose",
+	}
+
+	if options.OneShot {
+		args = append(args, "--oneshot")
+	}
+
+	args = append(args, cleanAtoms...)
 
 	cmd := exec.Command("emerge", args...)
 

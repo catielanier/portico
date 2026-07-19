@@ -17,6 +17,10 @@ type InstallProgress struct {
 	Total          int
 }
 
+type EmergeRunOptions struct {
+	OneShot bool
+}
+
 type EmergeInstaller struct{}
 
 func NewEmergeInstaller() *EmergeInstaller {
@@ -38,15 +42,42 @@ func (i *EmergeInstaller) InstallAtomsContext(
 	expectedTotal int,
 	onProgress func(InstallProgress),
 ) error {
+	return i.runAtomsContext(ctx, atoms, expectedTotal, EmergeRunOptions{}, onProgress)
+}
+
+func (i *EmergeInstaller) RebuildAtomsContext(
+	ctx context.Context,
+	atoms []string,
+	expectedTotal int,
+	onProgress func(InstallProgress),
+) error {
+	return i.runAtomsContext(ctx, atoms, expectedTotal, EmergeRunOptions{
+		OneShot: true,
+	}, onProgress)
+}
+
+func (i *EmergeInstaller) runAtomsContext(
+	ctx context.Context,
+	atoms []string,
+	expectedTotal int,
+	options EmergeRunOptions,
+	onProgress func(InstallProgress),
+) error {
 	cleanAtoms := cleanInstallAtoms(atoms)
 	if len(cleanAtoms) == 0 {
 		return fmt.Errorf("at least one atom is required")
 	}
 
-	args := append([]string{
+	args := []string{
 		"--verbose",
 		"--quiet-build=y",
-	}, cleanAtoms...)
+	}
+
+	if options.OneShot {
+		args = append(args, "--oneshot")
+	}
+
+	args = append(args, cleanAtoms...)
 
 	cmd := exec.CommandContext(ctx, "emerge", args...)
 

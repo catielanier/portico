@@ -102,3 +102,6 @@ other = "modify real /etc/portage configuration in this prototype step"
 
 [will_not_run_emerge_ask_in_prototype]
 other = "run emerge --ask in this prototype step"
+
+[will_not_add_to_world]
+other = "add rebuilt packages to @world"
