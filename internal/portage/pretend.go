@@ -10,6 +10,9 @@ import (
 
 type PretendOptions struct {
 	OneShot bool
+	Update  bool
+	Deep    bool
+	NewUse  bool
 }
 
 type PretendResult struct {
@@ -34,6 +37,27 @@ func EmergePretendOneshotWithConfigRootForAtoms(atoms []string, configRoot strin
 	})
 }
 
+func EmergePretendUpdateWorldWithConfigRoot(configRoot string) (*PretendResult, error) {
+	return EmergePretendWithConfigRootForAtomsWithOptions([]string{"@world"}, configRoot, PretendOptions{
+		Update: true,
+		Deep:   true,
+		NewUse: true,
+	})
+}
+
+func EmergePretendUpdateWithConfigRootForAtoms(atoms []string, configRoot string) (*PretendResult, error) {
+	cleanAtoms := cleanAtoms(atoms)
+	if len(cleanAtoms) == 0 {
+		return EmergePretendUpdateWorldWithConfigRoot(configRoot)
+	}
+
+	return EmergePretendWithConfigRootForAtomsWithOptions(cleanAtoms, configRoot, PretendOptions{
+		Update: true,
+		Deep:   true,
+		NewUse: true,
+	})
+}
+
 func EmergePretendWithConfigRootForAtomsWithOptions(
 	atoms []string,
 	configRoot string,
@@ -47,6 +71,18 @@ func EmergePretendWithConfigRootForAtomsWithOptions(
 	args := []string{
 		"--pretend",
 		"--verbose",
+	}
+
+	if options.Update {
+		args = append(args, "--update")
+	}
+
+	if options.Deep {
+		args = append(args, "--deep")
+	}
+
+	if options.NewUse {
+		args = append(args, "--newuse")
 	}
 
 	if options.OneShot {

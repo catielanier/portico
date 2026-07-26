@@ -105,3 +105,9 @@ other = "run emerge --ask in this prototype step"
 
 [will_not_add_to_world]
 other = "add rebuilt packages to @world"
+
+[will_run_emerge_update_pretend]
+other = "run emerge --pretend --verbose --update --deep --newuse {{.Target}}"
+
+[will_not_apply_update_autounmask]
+other = "apply update-time autounmask changes"

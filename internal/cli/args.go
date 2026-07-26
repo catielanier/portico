@@ -31,6 +31,16 @@ func validateOneOrMoreAtomArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func validateZeroOrMoreAtomArgs(cmd *cobra.Command, args []string) error {
+	for _, arg := range args {
+		if err := validateAtomShape(arg); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func validateAtomShape(atom string) error {
 	if simpleAtomPattern.MatchString(atom) {
 		return nil

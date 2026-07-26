@@ -19,6 +19,9 @@ type InstallProgress struct {
 
 type EmergeRunOptions struct {
 	OneShot bool
+	Update  bool
+	Deep    bool
+	NewUse  bool
 }
 
 type EmergeInstaller struct{}
@@ -56,6 +59,36 @@ func (i *EmergeInstaller) RebuildAtomsContext(
 	}, onProgress)
 }
 
+func (i *EmergeInstaller) UpdateWorldContext(
+	ctx context.Context,
+	expectedTotal int,
+	onProgress func(InstallProgress),
+) error {
+	return i.runAtomsContext(ctx, []string{"@world"}, expectedTotal, EmergeRunOptions{
+		Update: true,
+		Deep:   true,
+		NewUse: true,
+	}, onProgress)
+}
+
+func (i *EmergeInstaller) UpdateAtomsContext(
+	ctx context.Context,
+	atoms []string,
+	expectedTotal int,
+	onProgress func(InstallProgress),
+) error {
+	cleanAtoms := cleanInstallAtoms(atoms)
+	if len(cleanAtoms) == 0 {
+		return i.UpdateWorldContext(ctx, expectedTotal, onProgress)
+	}
+
+	return i.runAtomsContext(ctx, cleanAtoms, expectedTotal, EmergeRunOptions{
+		Update: true,
+		Deep:   true,
+		NewUse: true,
+	}, onProgress)
+}
+
 func (i *EmergeInstaller) runAtomsContext(
 	ctx context.Context,
 	atoms []string,
@@ -71,6 +104,18 @@ func (i *EmergeInstaller) runAtomsContext(
 	args := []string{
 		"--verbose",
 		"--quiet-build=y",
+	}
+
+	if options.Update {
+		args = append(args, "--update")
+	}
+
+	if options.Deep {
+		args = append(args, "--deep")
+	}
+
+	if options.NewUse {
+		args = append(args, "--newuse")
 	}
 
 	if options.OneShot {
