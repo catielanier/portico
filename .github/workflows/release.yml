@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          if [[ -z "${VERSION}" ]]; then
+            echo "Could not determine version from tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "archive_name=portico-${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate module
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+          go test ./...
+
+      - name: Build check
+        run: |
+          go build -o /tmp/portico ./cmd/portico
+
+      - name: Create source archive
+        shell: bash
+        run: |
+          ARCHIVE_NAME="${{ steps.version.outputs.archive_name }}"
+
+          mkdir -p dist
+
+          git archive \
+            --format=tar.gz \
+            --prefix="${ARCHIVE_NAME}/" \
+            -o "dist/${ARCHIVE_NAME}.tar.gz" \
+            "${GITHUB_REF_NAME}"
+
+      - name: Create vendor archive
+        shell: bash
+        run: |
+          ARCHIVE_NAME="${{ steps.version.outputs.archive_name }}"
+
+          TMPDIR="$(mktemp -d)"
+          trap 'rm -rf "${TMPDIR}"' EXIT
+
+          tar -xzf "dist/${ARCHIVE_NAME}.tar.gz" -C "${TMPDIR}"
+
+          (
+            cd "${TMPDIR}/${ARCHIVE_NAME}"
+            go mod vendor
+          )
+
+          tar -C "${TMPDIR}" \
+            -czf "dist/${ARCHIVE_NAME}-vendor.tar.gz" \
+            "${ARCHIVE_NAME}/vendor"
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCHIVE_NAME="${{ steps.version.outputs.archive_name }}"
+
+          gh release create "${GITHUB_REF_NAME}" \
+            "dist/${ARCHIVE_NAME}.tar.gz" \
+            "dist/${ARCHIVE_NAME}-vendor.tar.gz" \
+            "dist/checksums.txt" \
+            --title "Portico ${VERSION}" \
+            --generate-notes \
+            --prerelease
