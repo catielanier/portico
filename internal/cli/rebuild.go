@@ -15,15 +15,18 @@ import (
 )
 
 var rebuildCmd = &cobra.Command{
-	Use:   "rebuild <atom...>",
+	Use:   "rebuild <atom[@version]...>",
 	Short: "Revise USE flags and rebuild one or more packages",
-	Args:  validateOneOrMoreAtomArgs,
+	Args:  validateOneOrMorePackageTargetArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireRoot("rebuild packages"); err != nil {
 			return err
 		}
 
-		atoms := cleanInstallArgs(args)
+		atoms, err := packageAtomsFromArgs(args)
+		if err != nil {
+			return err
+		}
 
 		if err := syncRepositoriesForMutation(); err != nil {
 			return err

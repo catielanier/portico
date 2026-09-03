@@ -41,6 +41,33 @@ func validateZeroOrMoreAtomArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func validateSinglePackageTargetArg(cmd *cobra.Command, args []string) error {
+	if err := cobra.ExactArgs(1)(cmd, args); err != nil {
+		return err
+	}
+
+	_, err := parsePackageTarget(args[0])
+	return err
+}
+
+func validateOneOrMorePackageTargetArgs(cmd *cobra.Command, args []string) error {
+	if err := cobra.MinimumNArgs(1)(cmd, args); err != nil {
+		return err
+	}
+
+	_, err := parsePackageTargets(args)
+	return err
+}
+
+func validateZeroOrMorePackageTargetArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+
+	_, err := parsePackageTargets(args)
+	return err
+}
+
 func validateAtomShape(atom string) error {
 	if simpleAtomPattern.MatchString(atom) {
 		return nil

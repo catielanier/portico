@@ -15,15 +15,18 @@ import (
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install <atom...>",
+	Use:   "install <atom[@version]...>",
 	Short: "Configure USE flags and install one or more packages",
-	Args:  validateOneOrMoreAtomArgs,
+	Args:  validateOneOrMorePackageTargetArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireRoot("install packages"); err != nil {
 			return err
 		}
 
-		atoms := cleanInstallArgs(args)
+		atoms, err := packageAtomsFromArgs(args)
+		if err != nil {
+			return err
+		}
 
 		if err := syncRepositoriesForMutation(); err != nil {
 			return err
@@ -191,8 +194,8 @@ type AppliedInstallConfig struct {
 }
 
 type PretendResolution struct {
-	Result             *portage.PretendResult
-	Err                error
+	Result              *portage.PretendResult
+	Err                 error
 	RequiredUseChanges []portage.RequiredUseChange
 }
 

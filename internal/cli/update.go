@@ -14,15 +14,18 @@ import (
 )
 
 var updateCmd = &cobra.Command{
-	Use:   "update [atom...]",
+	Use:   "update [atom[@version]...]",
 	Short: "Update the world set or one or more packages",
-	Args:  validateZeroOrMoreAtomArgs,
+	Args:  validateZeroOrMorePackageTargetArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireRoot("update packages"); err != nil {
 			return err
 		}
 
-		atoms := cleanInstallArgs(args)
+		atoms, err := packageAtomsFromArgsOrWorld(args)
+		if err != nil {
+			return err
+		}
 
 		if err := syncRepositoriesForMutation(); err != nil {
 			return err
@@ -103,6 +106,14 @@ var updateCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func packageAtomsFromArgsOrWorld(args []string) ([]string, error) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+
+	return packageAtomsFromArgs(args)
 }
 
 func renderUpdatePlan(
