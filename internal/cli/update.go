@@ -42,18 +42,10 @@ var updateCmd = &cobra.Command{
 		}
 		defer sandbox.Cleanup()
 
-		var pretendResult *portage.PretendResult
-		var pretendErr error
+		maskActions := NewInstallMaskActions()
 
-		if err := ui.RunStep("Running emerge --pretend --update --deep --newuse", func() error {
-			pretendResult, pretendErr = portage.EmergePretendUpdateWithConfigRootForAtoms(atoms, sandbox.Root)
-
-			if pretendErr != nil && pretendResult == nil {
-				return pretendErr
-			}
-
-			return nil
-		}); err != nil {
+		pretendResolution, err := resolveUpdatePretendProblemsInSandbox(atoms, sandbox, maskActions)
+		if err != nil {
 			return err
 		}
 
@@ -63,23 +55,24 @@ var updateCmd = &cobra.Command{
 		}
 
 		transaction := (*portage.MergeTransaction)(nil)
-		if pretendResult != nil {
-			transaction = portage.ParseMergeTransaction(pretendResult.Raw)
+		if pretendResolution.Result != nil {
+			transaction = portage.ParseMergeTransaction(pretendResolution.Result.Raw)
 		}
 
 		renderUpdatePlan(
 			atoms,
+			maskActions,
 			transaction,
-			pretendResult,
-			pretendErr,
+			pretendResolution.Result,
+			pretendResolution.Err,
 			t,
 		)
 
-		if pretendErr != nil {
+		if pretendResolution.Err != nil {
 			fmt.Println()
-			fmt.Println("Portico does not apply update-time Portage config changes yet.")
+			fmt.Println("Portico can currently apply update-time license changes, but not USE changes or unsupported masks.")
 			fmt.Println("Resolve the issue shown above, then run update again.")
-			return pretendErr
+			return pretendResolution.Err
 		}
 
 		confirmed, err := confirmDefaultNo("Run this update?")
@@ -90,6 +83,19 @@ var updateCmd = &cobra.Command{
 		if !confirmed {
 			fmt.Println("Update cancelled.")
 			return nil
+		}
+
+		if len(maskActions.LicenseEntries) > 0 {
+			if err := ui.RunStep("Writing Portage license configuration", func() error {
+				_, err := applyInstallConfigToSystem(
+					map[string][]string{},
+					maskActions,
+					nil,
+				)
+				return err
+			}); err != nil {
+				return err
+			}
 		}
 
 		totalPackages := 0
@@ -116,8 +122,69 @@ func packageAtomsFromArgsOrWorld(args []string) ([]string, error) {
 	return packageAtomsFromArgs(args)
 }
 
+func resolveUpdatePretendProblemsInSandbox(
+	atoms []string,
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+) (*PretendResolution, error) {
+	const maxAttempts = 8
+
+	resolution := &PretendResolution{}
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		var pretendResult *portage.PretendResult
+		var pretendErr error
+
+		label := "Running emerge --pretend --update --deep --newuse"
+		if attempt > 1 {
+			label = fmt.Sprintf("Running emerge --pretend --update --deep --newuse retry %d", attempt)
+		}
+
+		if err := ui.RunStep(label, func() error {
+			pretendResult, pretendErr = portage.EmergePretendUpdateWithConfigRootForAtoms(atoms, sandbox.Root)
+
+			if pretendErr != nil && pretendResult == nil {
+				return pretendErr
+			}
+
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+
+		resolution.Result = pretendResult
+		resolution.Err = pretendErr
+
+		if pretendErr == nil {
+			return resolution, nil
+		}
+
+		if pretendResult == nil {
+			return resolution, nil
+		}
+
+		autounmaskReport := portage.ParseAutounmaskReport(pretendResult.Raw)
+		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
+			if err := applyRequiredLicenseChangesInSandbox(
+				autounmaskReport.RequiredLicenseChanges,
+				sandbox,
+				maskActions,
+			); err != nil {
+				return nil, err
+			}
+
+			continue
+		}
+
+		return resolution, nil
+	}
+
+	return resolution, fmt.Errorf("emerge --pretend --update --deep --newuse did not resolve after %d attempts", maxAttempts)
+}
+
 func renderUpdatePlan(
 	atoms []string,
+	maskActions *InstallMaskActions,
 	transaction *portage.MergeTransaction,
 	pretendResult *portage.PretendResult,
 	pretendErr error,
@@ -147,7 +214,7 @@ func renderUpdatePlan(
 				},
 			},
 			{
-				Key: "will_not_apply_update_autounmask",
+				Key: "will_not_apply_update_use_autounmask",
 			},
 			{
 				Key: jokes.RandomKey(jokes.Context{
@@ -163,6 +230,8 @@ func renderUpdatePlan(
 	fmt.Println("Target:")
 	fmt.Printf("  %s\n", target)
 	fmt.Println()
+
+	renderInstallMaskActions(maskActions)
 
 	if transaction != nil {
 		renderMergeTransaction(transaction)

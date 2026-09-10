@@ -244,6 +244,19 @@ func resolveInitialInstallMasksInSandbox(
 			return initialPretendErr
 		}
 
+		autounmaskReport := portage.ParseAutounmaskReport(initialPretendResult.Raw)
+		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
+			if err := applyRequiredLicenseChangesInSandbox(
+				autounmaskReport.RequiredLicenseChanges,
+				sandbox,
+				maskActions,
+			); err != nil {
+				return err
+			}
+
+			continue
+		}
+
 		maskReport := portage.ParseMaskedPackageReport("", initialPretendResult.Raw)
 		if maskReport == nil {
 			return nil
@@ -298,13 +311,13 @@ func resolvePretendProblemsInSandbox(
 			return resolution, nil
 		}
 
-		useReport := portage.ParseAutounmaskReport(pretendResult.Raw)
-		if useReport != nil && len(useReport.RequiredUseChanges) > 0 {
+		autounmaskReport := portage.ParseAutounmaskReport(pretendResult.Raw)
+		if autounmaskReport != nil && len(autounmaskReport.RequiredUseChanges) > 0 {
 			fmt.Println()
 			fmt.Println("Portage requires additional USE changes to proceed:")
 			fmt.Println()
 
-			for _, change := range useReport.RequiredUseChanges {
+			for _, change := range autounmaskReport.RequiredUseChanges {
 				fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
 
 				for _, requiredBy := range change.RequiredBy {
@@ -315,7 +328,7 @@ func resolvePretendProblemsInSandbox(
 			fmt.Println()
 			fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
 
-			for _, change := range useReport.RequiredUseChanges {
+			for _, change := range autounmaskReport.RequiredUseChanges {
 				if _, err := portage.WritePackageUseEntry(
 					sandbox.PortageConfigPath,
 					change.Atom,
@@ -325,6 +338,18 @@ func resolvePretendProblemsInSandbox(
 				}
 
 				resolution.RequiredUseChanges = append(resolution.RequiredUseChanges, change)
+			}
+
+			continue
+		}
+
+		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
+			if err := applyRequiredLicenseChangesInSandbox(
+				autounmaskReport.RequiredLicenseChanges,
+				sandbox,
+				maskActions,
+			); err != nil {
+				return nil, err
 			}
 
 			continue
@@ -446,6 +471,70 @@ func applyMaskedPackageReportInSandbox(
 	return nil
 }
 
+func applyRequiredLicenseChangesInSandbox(
+	changes []portage.RequiredLicenseChange,
+	sandbox *portage.ConfigSandbox,
+	maskActions *InstallMaskActions,
+) error {
+	if len(changes) == 0 {
+		return nil
+	}
+
+	fmt.Println()
+	fmt.Println("Portage requires additional licenses to proceed:")
+	fmt.Println()
+
+	for _, change := range changes {
+		fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Licenses, " "))
+
+		for _, requiredBy := range change.RequiredBy {
+			fmt.Printf("    required by: %s\n", requiredBy)
+		}
+	}
+
+	newLicenses := newLicenseTokensFromRequiredChanges(maskActions, changes)
+
+	if len(newLicenses) > 0 {
+		fmt.Println()
+		fmt.Println("Portico can accept these licenses for this transaction:")
+		fmt.Printf("  %s\n", strings.Join(newLicenses, " "))
+		fmt.Println()
+
+		confirmed, err := confirmDefaultNo("Accept these licenses for this transaction?")
+		if err != nil {
+			return err
+		}
+
+		if !confirmed {
+			fmt.Println("Transaction cancelled.")
+			return fmt.Errorf("required licenses were not accepted")
+		}
+
+		for _, license := range newLicenses {
+			maskActions.AcceptedLicenses[license] = true
+		}
+	} else {
+		fmt.Println()
+		fmt.Println("Portico already has permission to apply these license tokens in this transaction.")
+	}
+
+	for _, change := range changes {
+		if err := writeLicenseMaskEntryInSandbox(
+			sandbox,
+			maskActions,
+			change.Atom,
+			change.Licenses,
+		); err != nil {
+			return err
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("Portico applied these license changes to the temporary sandbox and will retry.")
+
+	return nil
+}
+
 func writeKeywordMaskEntryInSandbox(
 	sandbox *portage.ConfigSandbox,
 	maskActions *InstallMaskActions,
@@ -512,6 +601,10 @@ func writeLicenseMaskEntryInSandbox(
 }
 
 func newLicenseTokens(maskActions *InstallMaskActions, licenses []string) []string {
+	if maskActions == nil {
+		return nil
+	}
+
 	var out []string
 
 	for _, license := range cleanStringList(licenses) {
@@ -520,6 +613,35 @@ func newLicenseTokens(maskActions *InstallMaskActions, licenses []string) []stri
 		}
 
 		out = append(out, license)
+	}
+
+	return out
+}
+
+func newLicenseTokensFromRequiredChanges(
+	maskActions *InstallMaskActions,
+	changes []portage.RequiredLicenseChange,
+) []string {
+	if maskActions == nil {
+		return nil
+	}
+
+	var out []string
+	seen := make(map[string]bool)
+
+	for _, change := range changes {
+		for _, license := range cleanStringList(change.Licenses) {
+			if maskActions.AcceptedLicenses[license] {
+				continue
+			}
+
+			if seen[license] {
+				continue
+			}
+
+			seen[license] = true
+			out = append(out, license)
+		}
 	}
 
 	return out

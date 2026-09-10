@@ -198,6 +198,19 @@ func resolveInitialRebuildMasksInSandbox(
 			return initialPretendErr
 		}
 
+		autounmaskReport := portage.ParseAutounmaskReport(initialPretendResult.Raw)
+		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
+			if err := applyRequiredLicenseChangesInSandbox(
+				autounmaskReport.RequiredLicenseChanges,
+				sandbox,
+				maskActions,
+			); err != nil {
+				return err
+			}
+
+			continue
+		}
+
 		maskReport := portage.ParseMaskedPackageReport("", initialPretendResult.Raw)
 		if maskReport == nil {
 			return nil
@@ -252,13 +265,13 @@ func resolveRebuildPretendProblemsInSandbox(
 			return resolution, nil
 		}
 
-		useReport := portage.ParseAutounmaskReport(pretendResult.Raw)
-		if useReport != nil && len(useReport.RequiredUseChanges) > 0 {
+		autounmaskReport := portage.ParseAutounmaskReport(pretendResult.Raw)
+		if autounmaskReport != nil && len(autounmaskReport.RequiredUseChanges) > 0 {
 			fmt.Println()
 			fmt.Println("Portage requires additional USE changes to proceed:")
 			fmt.Println()
 
-			for _, change := range useReport.RequiredUseChanges {
+			for _, change := range autounmaskReport.RequiredUseChanges {
 				fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
 
 				for _, requiredBy := range change.RequiredBy {
@@ -269,7 +282,7 @@ func resolveRebuildPretendProblemsInSandbox(
 			fmt.Println()
 			fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
 
-			for _, change := range useReport.RequiredUseChanges {
+			for _, change := range autounmaskReport.RequiredUseChanges {
 				if _, err := portage.WritePackageUseEntry(
 					sandbox.PortageConfigPath,
 					change.Atom,
@@ -279,6 +292,18 @@ func resolveRebuildPretendProblemsInSandbox(
 				}
 
 				resolution.RequiredUseChanges = append(resolution.RequiredUseChanges, change)
+			}
+
+			continue
+		}
+
+		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
+			if err := applyRequiredLicenseChangesInSandbox(
+				autounmaskReport.RequiredLicenseChanges,
+				sandbox,
+				maskActions,
+			); err != nil {
+				return nil, err
 			}
 
 			continue
