@@ -1,3 +1,6 @@
+// internal/ui/installprogress.go
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package ui
 
 import (
@@ -5,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -25,6 +29,7 @@ type installProgressEventMsg struct {
 type installProgressModel struct {
 	label          string
 	bar            progress.Model
+	spin           spinner.Model
 	events         <-chan InstallProgressEvent
 	done           <-chan error
 	ctx            context.Context
@@ -34,6 +39,7 @@ type installProgressModel struct {
 	total          int
 	err            error
 	doneRendering  bool
+	succeeded      bool
 }
 
 func RunInstallProgress(
@@ -54,6 +60,7 @@ func RunInstallProgress(
 	model := installProgressModel{
 		label:  label,
 		bar:    progress.New(),
+		spin:   spinner.New(),
 		events: events,
 		done:   done,
 		ctx:    ctx,
@@ -79,7 +86,10 @@ func RunInstallProgress(
 }
 
 func (m installProgressModel) Init() tea.Cmd {
-	return m.waitForInstallMessage()
+	return tea.Batch(
+		m.spin.Tick,
+		m.waitForInstallMessage(),
+	)
 }
 
 func (m installProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -93,9 +103,20 @@ func (m installProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.err = context.Canceled
 			m.doneRendering = true
+			m.succeeded = false
 
 			return m, tea.Quit
 		}
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spin, cmd = m.spin.Update(msg)
+
+		if m.doneRendering {
+			return m, nil
+		}
+
+		return m, cmd
 
 	case installProgressEventMsg:
 		m.currentPackage = msg.event.CurrentPackage
@@ -110,6 +131,11 @@ func (m installProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case installProgressDoneMsg:
 		m.err = msg.err
 		m.doneRendering = true
+		m.succeeded = msg.err == nil
+
+		if m.succeeded && m.total > 0 {
+			m.currentIndex = m.total
+		}
 
 		return m, tea.Quit
 	}
@@ -131,23 +157,83 @@ func (m installProgressModel) View() string {
 		currentPackage = "Preparing emerge transaction..."
 	}
 
-	percent := 0.0
-	if m.total > 0 && m.currentIndex > 0 {
-		percent = float64(m.currentIndex) / float64(m.total)
+	activePackageIndex := m.currentIndex
+	if activePackageIndex < 0 {
+		activePackageIndex = 0
 	}
 
-	if percent > 1 {
-		percent = 1
+	totalPackages := m.total
+	if totalPackages < 0 {
+		totalPackages = 0
+	}
+
+	completedPackages := m.completedPackages()
+	percent := m.percentComplete()
+
+	packageLine := "Package progress unavailable"
+	if totalPackages > 0 && activePackageIndex > 0 {
+		packageLine = fmt.Sprintf("Package %d of %d", activePackageIndex, totalPackages)
+	} else if totalPackages > 0 {
+		packageLine = fmt.Sprintf("Package 0 of %d", totalPackages)
 	}
 
 	return fmt.Sprintf(
-		"%s\n\n%s\n%s\n\n%d / %d\n\nPress Ctrl+C to cancel.\n",
+		"%s\n\n%s\n\n%s Installing %s\n%s\n\nProgress: %.0f%%\n%s\n\nCompleted: %d / %d\n\nPress Ctrl+C to cancel.\n",
 		m.label,
+		"Install could take some time due to compilation. Grab a snack!",
+		m.spin.View(),
 		currentPackage,
+		packageLine,
+		percent*100,
 		m.bar.ViewAs(percent),
-		m.currentIndex,
-		m.total,
+		completedPackages,
+		totalPackages,
 	)
+}
+
+func (m installProgressModel) completedPackages() int {
+	if m.total <= 0 {
+		return 0
+	}
+
+	if m.succeeded {
+		return m.total
+	}
+
+	if m.currentIndex <= 0 {
+		return 0
+	}
+
+	completed := m.currentIndex - 1
+
+	if completed < 0 {
+		return 0
+	}
+
+	if completed > m.total {
+		return m.total
+	}
+
+	return completed
+}
+
+func (m installProgressModel) percentComplete() float64 {
+	if m.total <= 0 {
+		return 0
+	}
+
+	completed := m.completedPackages()
+	percent := float64(completed) / float64(m.total)
+
+	if percent < 0 {
+		return 0
+	}
+
+	if percent > 1 {
+		return 1
+	}
+
+	return percent
 }
 
 func (m installProgressModel) waitForInstallMessage() tea.Cmd {
@@ -155,7 +241,8 @@ func (m installProgressModel) waitForInstallMessage() tea.Cmd {
 		select {
 		case event, ok := <-m.events:
 			if !ok {
-				return installProgressDoneMsg{err: nil}
+				err := <-m.done
+				return installProgressDoneMsg{err: err}
 			}
 
 			return installProgressEventMsg{event: event}
