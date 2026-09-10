@@ -2,7 +2,9 @@ package portage
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -24,6 +26,11 @@ type RepositoryStatus struct {
 }
 
 func EnabledRepositories() ([]RepositoryStatus, error) {
+	enabledNames, err := enabledRepositoryNamesFromEselect()
+	if err != nil {
+		return nil, err
+	}
+
 	repositories := map[string]RepositoryStatus{}
 
 	if err := addRepositoriesFromReposConf(repositories); err != nil {
@@ -34,11 +41,19 @@ func EnabledRepositories() ([]RepositoryStatus, error) {
 		return nil, err
 	}
 
-	out := make([]RepositoryStatus, 0, len(repositories))
+	out := make([]RepositoryStatus, 0, len(enabledNames))
 
-	for _, repository := range repositories {
+	for name := range enabledNames {
+		repository, ok := repositories[name]
+		if !ok {
+			repository = RepositoryStatus{
+				Name:     name,
+				AutoSync: true,
+			}
+		}
+
 		if repository.Name == "" {
-			continue
+			repository.Name = name
 		}
 
 		if repository.Location == "" {
@@ -48,7 +63,6 @@ func EnabledRepositories() ([]RepositoryStatus, error) {
 		repository.Enabled = true
 
 		if !repository.AutoSync {
-			// AutoSync defaults to true. A false value only comes from repos.conf.
 			out = append(out, repository)
 			continue
 		}
@@ -64,6 +78,46 @@ func EnabledRepositories() ([]RepositoryStatus, error) {
 	})
 
 	return out, nil
+}
+
+func enabledRepositoryNamesFromEselect() (map[string]struct{}, error) {
+	cmd := exec.Command("eselect", "--brief", "repository", "list", "-i")
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := strings.TrimSpace(string(exitErr.Stderr))
+			if stderr != "" {
+				return nil, fmt.Errorf("list enabled repositories with eselect: %s", stderr)
+			}
+		}
+
+		return nil, fmt.Errorf("list enabled repositories with eselect: %w", err)
+	}
+
+	repositories := make(map[string]struct{})
+
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+
+		repositories[fields[0]] = struct{}{}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("parse enabled repositories from eselect: %w", err)
+	}
+
+	return repositories, nil
 }
 
 func NeverSyncedRepositories(repositories []RepositoryStatus) []RepositoryStatus {
