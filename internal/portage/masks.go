@@ -1,3 +1,6 @@
+// internal/portage/masks.go
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package portage
 
 import (
@@ -43,11 +46,6 @@ func ParseMaskedPackageReport(requestedAtom string, raw string) *MaskedPackageRe
 
 	lines := strings.Split(raw, "\n")
 
-	// Examples:
-	// !!! All ebuilds that could satisfy "media-video/obs-studio" have been masked.
-	// - media-video/obs-studio-32.1.2::gentoo (masked by: ~amd64 keyword)
-	// - app-example/foo-1.0::gentoo (masked by: GPL-3 license)
-	// - app-example/foo-1.0::gentoo (masked by: ~amd64 keyword, GPL-3 license)
 	candidatePattern := regexp.MustCompile(`^\s*-\s+(.+?)::([^ ]+)\s+\(masked by:\s+(.+?)\)\s*$`)
 
 	report := &MaskedPackageReport{
@@ -104,14 +102,16 @@ func classifyMaskReasons(reason string) []MaskReason {
 	reasons := make([]MaskReason, 0, len(parts))
 
 	for _, part := range parts {
-		switch {
-		case strings.Contains(part, "~") && strings.Contains(part, "keyword"):
-			reasons = append(reasons, MaskReasonTestingKeyword)
+		lowerPart := strings.ToLower(part)
 
-		case strings.Contains(part, "missing keyword"):
+		switch {
+		case strings.Contains(lowerPart, "missing keyword"):
 			reasons = append(reasons, MaskReasonMissingKeyword)
 
-		case strings.Contains(part, "license"):
+		case strings.Contains(lowerPart, "~") && strings.Contains(lowerPart, "keyword"):
+			reasons = append(reasons, MaskReasonTestingKeyword)
+
+		case strings.Contains(lowerPart, "license"):
 			reasons = append(reasons, MaskReasonLicense)
 
 		default:
@@ -133,6 +133,9 @@ func extractRequiredKeyword(reason string) string {
 		fields := strings.Fields(part)
 
 		for _, field := range fields {
+			field = strings.TrimSpace(field)
+			field = strings.TrimSuffix(field, ",")
+
 			if strings.HasPrefix(field, "~") {
 				return field
 			}
@@ -146,35 +149,57 @@ func extractRequiredLicenses(reason string) []string {
 	parts := splitMaskReasonParts(reason)
 
 	var licenses []string
+	seen := make(map[string]bool)
 
 	for _, part := range parts {
-		if !strings.Contains(part, "license") {
+		lowerPart := strings.ToLower(part)
+		if !strings.Contains(lowerPart, "license") {
 			continue
 		}
 
-		part = strings.TrimSpace(part)
-		part = strings.TrimSuffix(part, "license")
-		part = strings.TrimSuffix(part, "licenses")
-		part = strings.TrimSuffix(part, "license(s)")
-		part = strings.TrimSpace(part)
-
-		if part == "" {
+		cleaned := stripLicenseSuffix(part)
+		if cleaned == "" {
 			continue
 		}
 
-		for _, token := range strings.Fields(part) {
+		for _, token := range strings.Fields(cleaned) {
 			token = strings.TrimSpace(token)
-			token = strings.Trim(token, ",")
+			token = strings.TrimSuffix(token, ",")
 
 			if token == "" {
 				continue
 			}
 
+			if seen[token] {
+				continue
+			}
+
+			seen[token] = true
 			licenses = append(licenses, token)
 		}
 	}
 
 	return licenses
+}
+
+func stripLicenseSuffix(value string) string {
+	value = strings.TrimSpace(value)
+
+	lowerValue := strings.ToLower(value)
+
+	suffixes := []string{
+		" license(s)",
+		" licenses",
+		" license",
+	}
+
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(lowerValue, suffix) {
+			return strings.TrimSpace(value[:len(value)-len(suffix)])
+		}
+	}
+
+	return value
 }
 
 func splitMaskReasonParts(reason string) []string {
@@ -183,7 +208,7 @@ func splitMaskReasonParts(reason string) []string {
 	parts := make([]string, 0, len(rawParts))
 
 	for _, part := range rawParts {
-		part = strings.ToLower(strings.TrimSpace(part))
+		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
@@ -208,8 +233,6 @@ func BestMaskedCandidate(report *MaskedPackageReport) *MaskedCandidate {
 		return nil
 	}
 
-	// Prefer latest non-live ebuild from the list Portage gives us.
-	// Portage usually lists newest first.
 	for i := range report.Candidates {
 		if !report.Candidates[i].Live {
 			return &report.Candidates[i]

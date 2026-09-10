@@ -1,3 +1,6 @@
+// internal/portage/autounmask.go
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package portage
 
 import (
@@ -55,7 +58,7 @@ func parseRequiredUseChanges(raw string) []RequiredUseChange {
 
 	lines := strings.Split(raw, "\n")
 
-	useChangePattern := regexp.MustCompile(`^\s*([<>=~A-Za-z0-9_+./:-]+)\s+(.+?)\s*$`)
+	changePattern := regexp.MustCompile(`^\s*(\S+)\s+(.+?)\s*$`)
 	requiredByPattern := regexp.MustCompile(`^\s*#\s+required by\s+(.+?)\s*$`)
 
 	var changes []RequiredUseChange
@@ -79,7 +82,7 @@ func parseRequiredUseChanges(raw string) []RequiredUseChange {
 			break
 		}
 
-		if trimmed == "" || strings.HasPrefix(trimmed, "(see ") {
+		if shouldSkipAutounmaskLine(trimmed) {
 			continue
 		}
 
@@ -92,7 +95,7 @@ func parseRequiredUseChanges(raw string) []RequiredUseChange {
 			continue
 		}
 
-		matches := useChangePattern.FindStringSubmatch(trimmed)
+		matches := changePattern.FindStringSubmatch(trimmed)
 		if matches == nil {
 			continue
 		}
@@ -124,7 +127,7 @@ func parseRequiredKeywordChanges(raw string) []RequiredKeywordChange {
 
 	lines := strings.Split(raw, "\n")
 
-	keywordChangePattern := regexp.MustCompile(`^\s*([<>=~A-Za-z0-9_+./:-]+)\s+(.+?)\s*$`)
+	changePattern := regexp.MustCompile(`^\s*(\S+)\s+(.+?)\s*$`)
 	requiredByPattern := regexp.MustCompile(`^\s*#\s+required by\s+(.+?)\s*$`)
 
 	var changes []RequiredKeywordChange
@@ -148,7 +151,7 @@ func parseRequiredKeywordChanges(raw string) []RequiredKeywordChange {
 			break
 		}
 
-		if trimmed == "" || strings.HasPrefix(trimmed, "(see ") {
+		if shouldSkipAutounmaskLine(trimmed) {
 			continue
 		}
 
@@ -161,7 +164,7 @@ func parseRequiredKeywordChanges(raw string) []RequiredKeywordChange {
 			continue
 		}
 
-		matches := keywordChangePattern.FindStringSubmatch(trimmed)
+		matches := changePattern.FindStringSubmatch(trimmed)
 		if matches == nil {
 			continue
 		}
@@ -193,7 +196,7 @@ func parseRequiredLicenseChanges(raw string) []RequiredLicenseChange {
 
 	lines := strings.Split(raw, "\n")
 
-	licenseChangePattern := regexp.MustCompile(`^\s*([<>=~A-Za-z0-9_+./:-]+)\s+(.+?)\s*$`)
+	changePattern := regexp.MustCompile(`^\s*(\S+)\s+(.+?)\s*$`)
 	requiredByPattern := regexp.MustCompile(`^\s*#\s+required by\s+(.+?)\s*$`)
 
 	var changes []RequiredLicenseChange
@@ -217,7 +220,7 @@ func parseRequiredLicenseChanges(raw string) []RequiredLicenseChange {
 			break
 		}
 
-		if trimmed == "" || strings.HasPrefix(trimmed, "(see ") {
+		if shouldSkipAutounmaskLine(trimmed) {
 			continue
 		}
 
@@ -230,7 +233,7 @@ func parseRequiredLicenseChanges(raw string) []RequiredLicenseChange {
 			continue
 		}
 
-		matches := licenseChangePattern.FindStringSubmatch(trimmed)
+		matches := changePattern.FindStringSubmatch(trimmed)
 		if matches == nil {
 			continue
 		}
@@ -253,6 +256,22 @@ func parseRequiredLicenseChanges(raw string) []RequiredLicenseChange {
 	}
 
 	return changes
+}
+
+func shouldSkipAutounmaskLine(trimmed string) bool {
+	if trimmed == "" {
+		return true
+	}
+
+	if strings.HasPrefix(trimmed, "(see ") {
+		return true
+	}
+
+	if strings.HasPrefix(trimmed, "For more information") {
+		return true
+	}
+
+	return false
 }
 
 func isAutounmaskSectionBoundary(trimmed string) bool {
@@ -282,7 +301,7 @@ func cleanAutounmaskValues(values []string) []string {
 
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-		value = strings.Trim(value, ",")
+		value = strings.TrimSuffix(value, ",")
 
 		if value == "" {
 			continue
