@@ -1,3 +1,6 @@
+// internal/cli/rebuild.go
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package cli
 
 import (
@@ -173,12 +176,7 @@ func resolveInitialRebuildMasksInSandbox(
 		var initialPretendResult *portage.PretendResult
 		var initialPretendErr error
 
-		label := "Checking package availability"
-		if attempt > 1 {
-			label = fmt.Sprintf("Checking package availability retry %d", attempt)
-		}
-
-		if err := ui.RunStep(label, func() error {
+		if err := ui.RunStep("Checking dependencies...", func() error {
 			initialPretendResult, initialPretendErr = portage.EmergePretendOneshotWithConfigRootForAtoms(atoms, sandbox.Root)
 
 			if initialPretendErr != nil && initialPretendResult == nil {
@@ -198,13 +196,8 @@ func resolveInitialRebuildMasksInSandbox(
 			return initialPretendErr
 		}
 
-		autounmaskReport := portage.ParseAutounmaskReport(initialPretendResult.Raw)
-		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
-			if err := applyRequiredLicenseChangesInSandbox(
-				autounmaskReport.RequiredLicenseChanges,
-				sandbox,
-				maskActions,
-			); err != nil {
+		if handled, err := resolveAutounmaskChangesInSandbox(initialPretendResult.Raw, sandbox, maskActions, nil); handled || err != nil {
+			if err != nil {
 				return err
 			}
 
@@ -237,12 +230,7 @@ func resolveRebuildPretendProblemsInSandbox(
 		var pretendResult *portage.PretendResult
 		var pretendErr error
 
-		label := "Running emerge --pretend --oneshot"
-		if attempt > 1 {
-			label = fmt.Sprintf("Running emerge --pretend --oneshot retry %d", attempt)
-		}
-
-		if err := ui.RunStep(label, func() error {
+		if err := ui.RunStep("Checking dependencies...", func() error {
 			pretendResult, pretendErr = portage.EmergePretendOneshotWithConfigRootForAtoms(atoms, sandbox.Root)
 
 			if pretendErr != nil && pretendResult == nil {
@@ -265,44 +253,13 @@ func resolveRebuildPretendProblemsInSandbox(
 			return resolution, nil
 		}
 
-		autounmaskReport := portage.ParseAutounmaskReport(pretendResult.Raw)
-		if autounmaskReport != nil && len(autounmaskReport.RequiredUseChanges) > 0 {
-			fmt.Println()
-			fmt.Println("Portage requires additional USE changes to proceed:")
-			fmt.Println()
-
-			for _, change := range autounmaskReport.RequiredUseChanges {
-				fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
-
-				for _, requiredBy := range change.RequiredBy {
-					fmt.Printf("    required by: %s\n", requiredBy)
-				}
-			}
-
-			fmt.Println()
-			fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
-
-			for _, change := range autounmaskReport.RequiredUseChanges {
-				if _, err := portage.WritePackageUseEntry(
-					sandbox.PortageConfigPath,
-					change.Atom,
-					change.Flags,
-				); err != nil {
-					return nil, err
-				}
-
-				resolution.RequiredUseChanges = append(resolution.RequiredUseChanges, change)
-			}
-
-			continue
-		}
-
-		if autounmaskReport != nil && len(autounmaskReport.RequiredLicenseChanges) > 0 {
-			if err := applyRequiredLicenseChangesInSandbox(
-				autounmaskReport.RequiredLicenseChanges,
-				sandbox,
-				maskActions,
-			); err != nil {
+		if handled, err := resolveAutounmaskChangesInSandbox(
+			pretendResult.Raw,
+			sandbox,
+			maskActions,
+			&resolution.RequiredUseChanges,
+		); handled || err != nil {
+			if err != nil {
 				return nil, err
 			}
 

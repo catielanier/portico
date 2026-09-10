@@ -1,4 +1,4 @@
-ackage portage
+package portage
 
 import (
 	"regexp"
@@ -12,6 +12,13 @@ type RequiredUseChange struct {
 	Raw        string
 }
 
+type RequiredKeywordChange struct {
+	Atom       string
+	Keywords  []string
+	RequiredBy []string
+	Raw        string
+}
+
 type RequiredLicenseChange struct {
 	Atom       string
 	Licenses   []string
@@ -21,16 +28,20 @@ type RequiredLicenseChange struct {
 
 type AutounmaskReport struct {
 	RequiredUseChanges     []RequiredUseChange
+	RequiredKeywordChanges []RequiredKeywordChange
 	RequiredLicenseChanges []RequiredLicenseChange
 }
 
 func ParseAutounmaskReport(raw string) *AutounmaskReport {
 	report := &AutounmaskReport{
 		RequiredUseChanges:     parseRequiredUseChanges(raw),
+		RequiredKeywordChanges: parseRequiredKeywordChanges(raw),
 		RequiredLicenseChanges: parseRequiredLicenseChanges(raw),
 	}
 
-	if len(report.RequiredUseChanges) == 0 && len(report.RequiredLicenseChanges) == 0 {
+	if len(report.RequiredUseChanges) == 0 &&
+		len(report.RequiredKeywordChanges) == 0 &&
+		len(report.RequiredLicenseChanges) == 0 {
 		return nil
 	}
 
@@ -96,6 +107,75 @@ func parseRequiredUseChanges(raw string) []RequiredUseChange {
 		changes = append(changes, RequiredUseChange{
 			Atom:       atom,
 			Flags:      flags,
+			RequiredBy: append([]string(nil), requiredBy...),
+			Raw:        trimmed,
+		})
+
+		requiredBy = nil
+	}
+
+	return changes
+}
+
+func parseRequiredKeywordChanges(raw string) []RequiredKeywordChange {
+	if !strings.Contains(raw, "The following keyword changes are necessary to proceed:") {
+		return nil
+	}
+
+	lines := strings.Split(raw, "\n")
+
+	keywordChangePattern := regexp.MustCompile(`^\s*([<>=~A-Za-z0-9_+./:-]+)\s+(.+?)\s*$`)
+	requiredByPattern := regexp.MustCompile(`^\s*#\s+required by\s+(.+?)\s*$`)
+
+	var changes []RequiredKeywordChange
+	var requiredBy []string
+	inKeywordChanges := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.Contains(trimmed, "The following keyword changes are necessary to proceed:") {
+			inKeywordChanges = true
+			requiredBy = nil
+			continue
+		}
+
+		if !inKeywordChanges {
+			continue
+		}
+
+		if isAutounmaskSectionBoundary(trimmed) {
+			break
+		}
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "(see ") {
+			continue
+		}
+
+		if matches := requiredByPattern.FindStringSubmatch(trimmed); matches != nil {
+			requiredBy = append(requiredBy, strings.TrimSpace(matches[1]))
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		matches := keywordChangePattern.FindStringSubmatch(trimmed)
+		if matches == nil {
+			continue
+		}
+
+		atom := strings.TrimSpace(matches[1])
+		keywords := cleanAutounmaskValues(strings.Fields(strings.TrimSpace(matches[2])))
+
+		if atom == "" || len(keywords) == 0 {
+			continue
+		}
+
+		changes = append(changes, RequiredKeywordChange{
+			Atom:       atom,
+			Keywords:  keywords,
 			RequiredBy: append([]string(nil), requiredBy...),
 			Raw:        trimmed,
 		})
