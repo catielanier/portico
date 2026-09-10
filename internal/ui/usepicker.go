@@ -1,3 +1,6 @@
+// internal/ui/usepicker.go
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package ui
 
 import (
@@ -10,8 +13,8 @@ import (
 )
 
 const (
-	defaultTerminalHeight = 24
-	minFlagsPerPage      = 1
+	defaultTerminalHeight  = 24
+	minFlagsPerPage       = 1
 	usePickerReservedRows = 14
 )
 
@@ -44,10 +47,13 @@ func NewUsePickerModel(atom string, selections []useflags.FlagSelection) UsePick
 	model := UsePickerModel{
 		Atom:          atom,
 		Selections:    selections,
+		Cursor:        0,
+		Page:          0,
 		Height:        defaultTerminalHeight,
 		FocusedAction: usePickerActionConfirm,
 	}
 
+	model.clampPageAndCursor()
 	model.resetFocusedActionForPage()
 
 	return model
@@ -63,7 +69,7 @@ func (m UsePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Width = msg.Width
 		m.Height = msg.Height
 		m.clampPageAndCursor()
-		m.resetFocusedActionForPage()
+		m.ensureFocusedActionIsAvailable()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -74,18 +80,23 @@ func (m UsePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "up", "k":
 			m.moveCursorUp()
+			return m, nil
 
 		case "down", "j":
 			m.moveCursorDown()
+			return m, nil
 
 		case "left", "h", "shift+tab":
 			m.focusPreviousAction()
+			return m, nil
 
 		case "right", "l", "tab":
 			m.focusNextAction()
+			return m, nil
 
 		case " ":
 			m.toggleCurrentFlag()
+			return m, nil
 
 		case "enter":
 			return m.activateFocusedAction()
@@ -173,7 +184,7 @@ func (m UsePickerModel) View() string {
 	return b.String()
 }
 
-func (m UsePickerModel) moveCursorUp() {
+func (m *UsePickerModel) moveCursorUp() {
 	if len(m.Selections) == 0 {
 		return
 	}
@@ -187,13 +198,13 @@ func (m UsePickerModel) moveCursorUp() {
 
 	if m.Page > 0 {
 		m.Page--
-		_, end := m.visibleRange()
-		m.Cursor = end - 1
-		m.resetFocusedActionForPage()
+		_, previousEnd := m.visibleRange()
+		m.Cursor = previousEnd - 1
+		m.ensureFocusedActionIsAvailable()
 	}
 }
 
-func (m UsePickerModel) moveCursorDown() {
+func (m *UsePickerModel) moveCursorDown() {
 	if len(m.Selections) == 0 {
 		return
 	}
@@ -207,9 +218,9 @@ func (m UsePickerModel) moveCursorDown() {
 
 	if m.Page < m.pageCount()-1 {
 		m.Page++
-		start, _ := m.visibleRange()
-		m.Cursor = start
-		m.resetFocusedActionForPage()
+		nextStart, _ := m.visibleRange()
+		m.Cursor = nextStart
+		m.ensureFocusedActionIsAvailable()
 	}
 }
 
@@ -232,7 +243,7 @@ func (m UsePickerModel) activateFocusedAction() (tea.Model, tea.Cmd) {
 			m.Page--
 			start, _ := m.visibleRange()
 			m.Cursor = start
-			m.resetFocusedActionForPage()
+			m.ensureFocusedActionIsAvailable()
 		}
 
 		return m, nil
@@ -242,7 +253,7 @@ func (m UsePickerModel) activateFocusedAction() (tea.Model, tea.Cmd) {
 			m.Page++
 			start, _ := m.visibleRange()
 			m.Cursor = start
-			m.resetFocusedActionForPage()
+			m.ensureFocusedActionIsAvailable()
 			return m, nil
 		}
 
@@ -258,6 +269,7 @@ func (m UsePickerModel) activateFocusedAction() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	default:
+		m.ensureFocusedActionIsAvailable()
 		return m, nil
 	}
 }
@@ -268,15 +280,9 @@ func (m *UsePickerModel) focusPreviousAction() {
 		return
 	}
 
-	currentIndex := 0
-	for i, action := range actions {
-		if action == m.FocusedAction {
-			currentIndex = i
-			break
-		}
-	}
+	currentIndex := m.focusedActionIndex(actions)
 
-	if currentIndex == 0 {
+	if currentIndex <= 0 {
 		m.FocusedAction = actions[len(actions)-1]
 		return
 	}
@@ -290,15 +296,9 @@ func (m *UsePickerModel) focusNextAction() {
 		return
 	}
 
-	currentIndex := 0
-	for i, action := range actions {
-		if action == m.FocusedAction {
-			currentIndex = i
-			break
-		}
-	}
+	currentIndex := m.focusedActionIndex(actions)
 
-	if currentIndex == len(actions)-1 {
+	if currentIndex >= len(actions)-1 {
 		m.FocusedAction = actions[0]
 		return
 	}
@@ -306,23 +306,63 @@ func (m *UsePickerModel) focusNextAction() {
 	m.FocusedAction = actions[currentIndex+1]
 }
 
-func (m *UsePickerModel) resetFocusedActionForPage() {
-	if len(m.Selections) == 0 {
+func (m UsePickerModel) focusedActionIndex(actions []usePickerAction) int {
+	for i, action := range actions {
+		if action == m.FocusedAction {
+			return i
+		}
+	}
+
+	return m.primaryActionIndex(actions)
+}
+
+func (m UsePickerModel) primaryActionIndex(actions []usePickerAction) int {
+	primary := m.primaryAction()
+
+	for i, action := range actions {
+		if action == primary {
+			return i
+		}
+	}
+
+	return 0
+}
+
+func (m *UsePickerModel) ensureFocusedActionIsAvailable() {
+	actions := m.availableActions()
+	if len(actions) == 0 {
 		m.FocusedAction = usePickerActionConfirm
 		return
+	}
+
+	for _, action := range actions {
+		if action == m.FocusedAction {
+			return
+		}
+	}
+
+	m.FocusedAction = m.primaryAction()
+}
+
+func (m *UsePickerModel) resetFocusedActionForPage() {
+	m.FocusedAction = m.primaryAction()
+	m.ensureFocusedActionIsAvailable()
+}
+
+func (m UsePickerModel) primaryAction() usePickerAction {
+	if len(m.Selections) == 0 {
+		return usePickerActionConfirm
 	}
 
 	if m.pageCount() <= 1 {
-		m.FocusedAction = usePickerActionConfirm
-		return
+		return usePickerActionConfirm
 	}
 
 	if m.Page < m.pageCount()-1 {
-		m.FocusedAction = usePickerActionNext
-		return
+		return usePickerActionNext
 	}
 
-	m.FocusedAction = usePickerActionConfirm
+	return usePickerActionConfirm
 }
 
 func (m UsePickerModel) renderButtons() string {
@@ -390,9 +430,17 @@ func renderUsePickerButton(label string, focused bool) string {
 }
 
 func (m UsePickerModel) visibleRange() (int, int) {
+	if len(m.Selections) == 0 {
+		return 0, 0
+	}
+
 	flagsPerPage := m.flagsPerPage()
 
 	start := m.Page * flagsPerPage
+	if start < 0 {
+		start = 0
+	}
+
 	if start > len(m.Selections) {
 		start = len(m.Selections)
 	}
@@ -400,6 +448,10 @@ func (m UsePickerModel) visibleRange() (int, int) {
 	end := start + flagsPerPage
 	if end > len(m.Selections) {
 		end = len(m.Selections)
+	}
+
+	if end < start {
+		end = start
 	}
 
 	return start, end
@@ -440,15 +492,24 @@ func (m *UsePickerModel) clampPageAndCursor() {
 	}
 
 	pageCount := m.pageCount()
-	if m.Page >= pageCount {
-		m.Page = pageCount - 1
+	if pageCount <= 0 {
+		pageCount = 1
 	}
 
 	if m.Page < 0 {
 		m.Page = 0
 	}
 
+	if m.Page >= pageCount {
+		m.Page = pageCount - 1
+	}
+
 	start, end := m.visibleRange()
+
+	if start == end {
+		m.Cursor = start
+		return
+	}
 
 	if m.Cursor < start {
 		m.Cursor = start
@@ -460,6 +521,10 @@ func (m *UsePickerModel) clampPageAndCursor() {
 
 	if m.Cursor < 0 {
 		m.Cursor = 0
+	}
+
+	if m.Cursor >= len(m.Selections) {
+		m.Cursor = len(m.Selections) - 1
 	}
 }
 
@@ -479,7 +544,7 @@ func RunUsePicker(atom string, selections []useflags.FlagSelection) ([]useflags.
 	}
 
 	model := NewUsePickerModel(atom, selections)
-	program := tea.NewProgram(model)
+	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	finalModel, err := program.Run()
 	if err != nil {
