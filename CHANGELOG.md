@@ -4,6 +4,75 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.4.2] - 2026-09-10
+
+### Fixed
+
+- Fixed license acceptance for unusual or nonstandard license identifiers.
+  - Portico now preserves exact license tokens reported by Portage.
+  - Uncommon or previously unseen license names are no longer rejected or normalized incorrectly.
+  - License identifiers with hyphens, underscores, mixed case, or other valid punctuation are handled as reported.
+  - Multiple licenses on a single package are handled.
+  - Multiple packages with different license requirements are handled.
+  - License requirements discovered through dependency resolution are handled iteratively.
+
+- Fixed license parsing in masked-package reports.
+  - Mask reason classification remains case-insensitive.
+  - Extracted license identifiers are no longer lowercased.
+  - Package-scoped license entries written to `package.license` now preserve the license text Portage actually reported.
+
+- Fixed license parsing in autounmask reports.
+  - Portico now treats the first field as the package atom and all remaining fields as exact license tokens.
+  - License requirements are no longer limited to simple alphanumeric identifiers.
+  - Previously unseen license identifiers can be surfaced to the user for explicit approval.
+
+- Fixed USE flag selector input when pagination is active.
+  - `↑` / `↓` and `k` / `j` now navigate visible USE flags.
+  - `Space` toggles the currently selected USE flag.
+  - `←` / `→` and `h` / `l` now cycle through available action buttons.
+  - `Tab` and `Shift+Tab` also cycle button focus.
+  - `Enter` activates the focused button.
+  - `Next` advances exactly one page.
+  - `Prev` moves back exactly one page.
+  - Selections persist across page changes.
+  - Input remains valid after terminal resizing.
+
+### Changed
+
+- Improved USE picker focus handling.
+  - The picker now keeps flag cursor state and button focus state valid after paging or resizing.
+  - Page changes preserve selection state instead of resetting or losing interaction state.
+  - Button focus is revalidated whenever the available actions change.
+  - The USE picker now uses Bubble Tea’s alt-screen mode for cleaner terminal rendering.
+
+- Improved license handling philosophy.
+  - Portico now treats Portage’s reported license identifiers as authoritative.
+  - Portico still requires explicit user confirmation before accepting licenses.
+  - Portico still writes package-scoped license entries instead of modifying global `ACCEPT_LICENSE`.
+
+### Internal
+
+- Hardened autounmask parsing for:
+  - USE changes
+  - keyword changes
+  - license changes
+
+- Hardened masked-package parsing so detection can normalize text for classification without mutating extracted values.
+
+- Updated USE picker state mutation to use pointer receivers where state must persist.
+
+- Added explicit validation for focused action buttons after page changes and terminal resize events.
+
+### Known issues
+
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Repository and overlay management still need full real implementation.
+- Package config writing still needs safer merge/replace/diff behavior.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- The keyword traversal issue still needs real-world testing across requested atoms, direct dependencies, deep dependencies, and mixed keyword/license transactions.
+
 ## [0.4.1] - 2026-09-10
 
 ### Fixed
