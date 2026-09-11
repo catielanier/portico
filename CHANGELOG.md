@@ -4,6 +4,73 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.5.1] - 2026-09-11
+
+### Added
+
+- Added package uninstall support.
+  - New command: `sudo portico uninstall <atom...>`.
+  - Supports uninstalling one or more package atoms in a single command.
+  - Uses `emerge --unmerge <atom...>` for the requested packages.
+  - Requires root privileges.
+
+- Added post-uninstall depclean prompt.
+  - After uninstalling the requested package or packages, Portico asks whether to run depclean.
+  - Depclean only runs if the user confirms.
+  - If declined, Portico exits without running depclean.
+
+- Added explicit depclean command.
+  - New command: `sudo portico clean`.
+  - Runs `emerge --depclean`.
+  - Requires root privileges.
+  - Does not take package arguments.
+
+- Added i18n coverage for uninstall and clean commands.
+  - Added help text keys for `uninstall`.
+  - Added help text keys for `clean`.
+  - Added runtime message keys for uninstall, depclean prompt, depclean skipped, clean start, and clean completion.
+
+- Added routed help coverage for uninstall and clean.
+  - `portico --help uninstall`
+  - `portico --help clean`
+
+### Changed
+
+- README now documents package removal workflows.
+  - Added `uninstall` command documentation.
+  - Added `clean` command documentation.
+  - Clarified that uninstall uses `emerge --unmerge`.
+  - Clarified that clean uses `emerge --depclean`.
+  - Clarified that depclean after uninstall is prompted, not automatic.
+
+- Root command registration now includes:
+  - `uninstall`
+  - `clean`
+
+### Internal
+
+- Added Portage cleanup wrapper logic.
+  - `Unmerge()` runs `emerge --unmerge <atom...>`.
+  - `Depclean()` runs `emerge --depclean`.
+  - Package atom cleanup deduplicates atom arguments before passing them to Portage.
+
+- Added CLI workflow separation for uninstall and clean.
+  - `uninstall` handles targeted package removal.
+  - `clean` handles standalone depclean.
+  - Shared yes/no prompt helper handles the post-uninstall depclean prompt.
+
+### Known issues
+
+- `uninstall` currently delegates directly to `emerge --unmerge` and does not preview the removal first.
+- `clean` currently delegates directly to `emerge --depclean` and does not preview the depclean first.
+- `uninstall` does not remove Portico-managed package configuration entries for the removed atom.
+- `clean` does not accept package arguments.
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- Unit tests still need to be added for uninstall, clean, post-uninstall depclean prompting, and help routing.
+
 ## [0.5.0] - 2026-09-11
 
 ### Added
