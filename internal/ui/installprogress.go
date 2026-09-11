@@ -1,12 +1,10 @@
-// internal/ui/installprogress.go
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 package ui
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/catielanier/portico/internal/i18n"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,6 +26,7 @@ type installProgressEventMsg struct {
 
 type installProgressModel struct {
 	label          string
+	translator     *i18n.Translator
 	bar            progress.Model
 	spin           spinner.Model
 	events         <-chan InstallProgressEvent
@@ -58,14 +57,15 @@ func RunInstallProgress(
 	}()
 
 	model := installProgressModel{
-		label:  label,
-		bar:    progress.New(),
-		spin:   spinner.New(),
-		events: events,
-		done:   done,
-		ctx:    ctx,
-		cancel: cancel,
-		total:  total,
+		label:      label,
+		translator: i18n.MustDefault(),
+		bar:        progress.New(),
+		spin:       spinner.New(),
+		events:     events,
+		done:       done,
+		ctx:        ctx,
+		cancel:     cancel,
+		total:      total,
 	}
 
 	program := tea.NewProgram(model)
@@ -154,7 +154,7 @@ func (m installProgressModel) View() string {
 
 	currentPackage := m.currentPackage
 	if currentPackage == "" {
-		currentPackage = "Preparing emerge transaction..."
+		currentPackage = m.t("install_progress_preparing", nil)
 	}
 
 	activePackageIndex := m.currentIndex
@@ -170,24 +170,43 @@ func (m installProgressModel) View() string {
 	completedPackages := m.completedPackages()
 	percent := m.percentComplete()
 
-	packageLine := "Package progress unavailable"
+	packageLine := m.t("install_progress_package_unavailable", nil)
 	if totalPackages > 0 && activePackageIndex > 0 {
-		packageLine = fmt.Sprintf("Package %d of %d", activePackageIndex, totalPackages)
+		packageLine = m.t("install_progress_package_count", map[string]any{
+			"Current": activePackageIndex,
+			"Total":   totalPackages,
+		})
 	} else if totalPackages > 0 {
-		packageLine = fmt.Sprintf("Package 0 of %d", totalPackages)
+		packageLine = m.t("install_progress_package_count", map[string]any{
+			"Current": 0,
+			"Total":   totalPackages,
+		})
 	}
 
+	installLine := m.t("install_progress_label", map[string]any{
+		"Spinner": m.spin.View(),
+		"Package": currentPackage,
+	})
+
+	progressLine := m.t("install_progress_percent", map[string]any{
+		"Percent": fmt.Sprintf("%.0f", percent*100),
+	})
+
+	completedLine := m.t("install_progress_completed", map[string]any{
+		"Completed": completedPackages,
+		"Total":     totalPackages,
+	})
+
 	return fmt.Sprintf(
-		"%s\n\n%s\n\n%s Installing %s\n%s\n\nProgress: %.0f%%\n%s\n\nCompleted: %d / %d\n\nPress Ctrl+C to cancel.\n",
+		"%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s\n\n%s\n",
 		m.label,
-		"Install could take some time due to compilation. Grab a snack!",
-		m.spin.View(),
-		currentPackage,
+		m.t("install_progress_compilation_notice", nil),
+		installLine,
 		packageLine,
-		percent*100,
+		progressLine,
 		m.bar.ViewAs(percent),
-		completedPackages,
-		totalPackages,
+		completedLine,
+		m.t("install_progress_cancel_hint", nil),
 	)
 }
 
@@ -254,4 +273,13 @@ func (m installProgressModel) waitForInstallMessage() tea.Cmd {
 			return installProgressDoneMsg{err: m.ctx.Err()}
 		}
 	}
+}
+
+func (m installProgressModel) t(id string, data map[string]any) string {
+	translator := m.translator
+	if translator == nil {
+		translator = i18n.MustDefault()
+	}
+
+	return translator.T(id, data)
 }

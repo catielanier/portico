@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"embed"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 	goi18n "github.com/nicksnyder/go-i18n/v2/i18n"
@@ -14,6 +15,11 @@ var localeFS embed.FS
 type Translator struct {
 	localizer *goi18n.Localizer
 }
+
+var (
+	defaultTranslator     *Translator
+	defaultTranslatorOnce sync.Once
+)
 
 func New(locale string) (*Translator, error) {
 	bundle := goi18n.NewBundle(language.English)
@@ -32,7 +38,25 @@ func New(locale string) (*Translator, error) {
 	}, nil
 }
 
+func MustDefault() *Translator {
+	defaultTranslatorOnce.Do(func() {
+		translator, err := New("en")
+		if err != nil {
+			defaultTranslator = &Translator{}
+			return
+		}
+
+		defaultTranslator = translator
+	})
+
+	return defaultTranslator
+}
+
 func (t *Translator) T(id string, data map[string]any) string {
+	if t == nil || t.localizer == nil {
+		return id
+	}
+
 	msg, err := t.localizer.Localize(&goi18n.LocalizeConfig{
 		MessageID:    id,
 		TemplateData: data,

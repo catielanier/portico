@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/catielanier/portico/internal/i18n"
 	"github.com/catielanier/portico/internal/useflags"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -30,6 +31,7 @@ const (
 type UsePickerModel struct {
 	Atom        string
 	Selections []useflags.FlagSelection
+	Translator *i18n.Translator
 
 	Cursor int
 	Page   int
@@ -47,6 +49,7 @@ func NewUsePickerModel(atom string, selections []useflags.FlagSelection) UsePick
 	model := UsePickerModel{
 		Atom:          atom,
 		Selections:    selections,
+		Translator:    i18n.MustDefault(),
 		Cursor:        0,
 		Page:          0,
 		Width:         defaultTerminalWidth,
@@ -122,17 +125,25 @@ func (m UsePickerModel) View() string {
 	flagsPerPage := m.flagsPerPage()
 	start, end := m.visibleRange()
 
-	b.WriteString(fmt.Sprintf("USE flags — %s\n\n", m.Atom))
+	b.WriteString(m.t("use_picker_title", map[string]any{
+		"Atom": m.Atom,
+	}))
+	b.WriteString("\n\n")
 
 	if pageCount > 1 {
-		b.WriteString(fmt.Sprintf("Page %d of %d\n\n", m.Page+1, pageCount))
+		b.WriteString(m.t("use_picker_page", map[string]any{
+			"Page":  m.Page + 1,
+			"Pages": pageCount,
+		}))
+		b.WriteString("\n\n")
 	}
 
 	if m.hasInstalledColumn() {
-		b.WriteString("  U I  Choice  Flag\n")
+		b.WriteString(m.t("use_picker_header_with_installed", nil))
 	} else {
-		b.WriteString("  U  Choice  Flag\n")
+		b.WriteString(m.t("use_picker_header_without_installed", nil))
 	}
+	b.WriteString("\n")
 
 	for i := start; i < end; i++ {
 		flag := m.Selections[i]
@@ -180,8 +191,10 @@ func (m UsePickerModel) View() string {
 	b.WriteString(m.renderHighlightedDescription())
 	b.WriteString("\n")
 
-	b.WriteString("↑/↓ or k/j Navigate   Space Toggle\n")
-	b.WriteString("←/→ or h/l Move buttons   Enter Select\n\n")
+	b.WriteString(m.t("use_picker_help_navigation", nil))
+	b.WriteString("\n")
+	b.WriteString(m.t("use_picker_help_buttons", nil))
+	b.WriteString("\n\n")
 	b.WriteString(m.renderButtons())
 	b.WriteString("\n")
 
@@ -413,15 +426,15 @@ func (m UsePickerModel) availableActions() []usePickerAction {
 func (m UsePickerModel) actionLabel(action usePickerAction) string {
 	switch action {
 	case usePickerActionPrev:
-		return "Prev"
+		return m.t("common_prev", nil)
 	case usePickerActionNext:
-		return "Next"
+		return m.t("common_next", nil)
 	case usePickerActionConfirm:
-		return "Confirm"
+		return m.t("common_confirm", nil)
 	case usePickerActionCancel:
-		return "Cancel"
+		return m.t("common_cancel", nil)
 	default:
-		return "Unknown"
+		return m.t("common_unknown", nil)
 	}
 }
 
@@ -444,7 +457,7 @@ func (m UsePickerModel) renderHighlightedDescription() string {
 
 	description := strings.TrimSpace(m.Selections[m.Cursor].Description)
 	if description == "" {
-		description = "No description available."
+		description = m.t("use_picker_no_description", nil)
 	}
 
 	width := m.descriptionWidth()
@@ -456,7 +469,8 @@ func (m UsePickerModel) renderHighlightedDescription() string {
 
 	var b strings.Builder
 
-	b.WriteString("Description:\n")
+	b.WriteString(m.t("use_picker_description_heading", nil))
+	b.WriteString("\n")
 
 	for _, line := range lines {
 		b.WriteString("  ")
@@ -592,6 +606,15 @@ func (m UsePickerModel) hasInstalledColumn() bool {
 	}
 
 	return false
+}
+
+func (m UsePickerModel) t(id string, data map[string]any) string {
+	translator := m.Translator
+	if translator == nil {
+		translator = i18n.MustDefault()
+	}
+
+	return translator.T(id, data)
 }
 
 func wrapText(value string, width int) []string {

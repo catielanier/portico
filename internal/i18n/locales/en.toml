@@ -1,12 +1,3 @@
-[will_inspect_use_flags]
-other = "inspect USE flags for {{.Atom}}"
-
-[will_write_package_use]
-other = "write selected USE flags to {{.Path}}"
-
-[will_not_install_in_prototype]
-other = "install anything in this prototype step"
-
 [plan_title]
 other = "Portico Plan"
 
@@ -18,6 +9,27 @@ other = "Portico will not:"
 
 [confirm_continue]
 other = "Continue? [y/N]"
+
+[common_confirm]
+other = "Confirm"
+
+[common_cancel]
+other = "Cancel"
+
+[common_next]
+other = "Next"
+
+[common_prev]
+other = "Prev"
+
+[common_unknown]
+other = "Unknown"
+
+[common_no_output]
+other = "No output returned."
+
+[dependency_checking]
+other = "Checking dependencies..."
 
 [will_install_atom]
 other = "install {{.Atom}}"
@@ -34,8 +46,89 @@ other = "modify global USE flags in {{.Path}}"
 [will_not_overwrite_package_use]
 other = "overwrite user-managed package.use entries"
 
+[will_inspect_use_flags]
+other = "inspect USE flags for {{.Atom}}"
+
+[will_write_package_use]
+other = "write selected USE flags to {{.Path}}"
+
+[will_not_install_in_prototype]
+other = "install anything in this prototype step"
+
+[will_create_config_sandbox]
+other = "create a temporary Portage config sandbox"
+
+[will_write_sandbox_package_use]
+other = "write selected USE flags to the temporary package.use file"
+
+[will_show_portage_transaction]
+other = "show the calculated Portage transaction"
+
+[will_not_modify_real_portage_config]
+other = "modify real /etc/portage configuration in this prototype step"
+
+[will_not_run_emerge_ask_in_prototype]
+other = "run emerge --ask in this prototype step"
+
+[will_not_add_to_world]
+other = "add rebuilt packages to @world"
+
+[will_run_emerge_update_pretend]
+other = "run emerge --pretend --verbose --update --deep --newuse {{.Target}}"
+
+[will_not_apply_update_use_autounmask]
+other = "apply update-time USE changes"
+
+[use_picker_title]
+other = "USE flags — {{.Atom}}"
+
+[use_picker_page]
+other = "Page {{.Page}} of {{.Pages}}"
+
+[use_picker_header_with_installed]
+other = "  U I  Choice  Flag"
+
+[use_picker_header_without_installed]
+other = "  U  Choice  Flag"
+
+[use_picker_description_heading]
+other = "Description:"
+
+[use_picker_no_description]
+other = "No description available."
+
+[use_picker_help_navigation]
+other = "↑/↓ or k/j Navigate   Space Toggle"
+
+[use_picker_help_buttons]
+other = "←/→ or h/l Move buttons   Enter Select"
+
+[install_progress_preparing]
+other = "Preparing emerge transaction..."
+
+[install_progress_compilation_notice]
+other = "Install could take some time due to compilation. Grab a snack!"
+
+[install_progress_package_unavailable]
+other = "Package progress unavailable"
+
+[install_progress_package_count]
+other = "Package {{.Current}} of {{.Total}}"
+
+[install_progress_label]
+other = "{{.Spinner}} Installing {{.Package}}"
+
+[install_progress_percent]
+other = "Progress: {{.Percent}}%"
+
+[install_progress_completed]
+other = "Completed: {{.Completed}} / {{.Total}}"
+
+[install_progress_cancel_hint]
+other = "Press Ctrl+C to cancel."
+
 [joke.arch]
-other = "tell you, \"Actually, I use Arch.\""
+other = "tell you, \"btw I use Arch.\""
 
 [joke.lmgtfy]
 other = "provide you with a LMGTFY link"
@@ -84,30 +177,3 @@ other = "become your BIOS therapist"
 
 [joke.overlay_goblins]
 other = "pretend overlays are not where the goblins keep their furniture"
-
-[joke.obs_poggers]
-other = "immediately make your stream totally poggers."
-
-[will_create_config_sandbox]
-other = "create a temporary Portage config sandbox"
-
-[will_write_sandbox_package_use]
-other = "write selected USE flags to the temporary package.use file"
-
-[will_show_portage_transaction]
-other = "show the calculated Portage transaction"
-
-[will_not_modify_real_portage_config]
-other = "modify real /etc/portage configuration in this prototype step"
-
-[will_not_run_emerge_ask_in_prototype]
-other = "run emerge --ask in this prototype step"
-
-[will_not_add_to_world]
-other = "add rebuilt packages to @world"
-
-[will_run_emerge_update_pretend]
-other = "run emerge --pretend --verbose --update --deep --newuse {{.Target}}"
-
-[will_not_apply_update_autounmask]
-other = "apply update-time autounmask changes"
