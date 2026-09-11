@@ -15,8 +15,10 @@ func newRepoCommand(commandName string, short string) *cobra.Command {
 	translator := i18n.MustDefault()
 
 	cmd := &cobra.Command{
-		Use:   commandName,
-		Short: short,
+		Use:     commandName,
+		Short:   short,
+		Long:    repoCommandLong(commandName, translator),
+		Example: repoCommandExample(commandName, translator),
 	}
 
 	cmd.AddCommand(newRepoListCommand(commandName, manager, translator))
@@ -27,10 +29,25 @@ func newRepoCommand(commandName string, short string) *cobra.Command {
 	return cmd
 }
 
+func repoCommandLong(commandName string, translator *i18n.Translator) string {
+	return translator.T("repo_long", map[string]any{
+		"Command": commandName,
+	})
+}
+
+func repoCommandExample(commandName string, translator *i18n.Translator) string {
+	return translator.T("repo_example", map[string]any{
+		"Command": commandName,
+	})
+}
+
 func newRepoListCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: translator.T("repo_list_short", nil),
+		Use:     "list",
+		Short:   translator.T("repo_list_short", nil),
+		Long:    translator.T("repo_list_long", map[string]any{"Command": commandName}),
+		Example: translator.T("repo_list_example", map[string]any{"Command": commandName}),
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repositories, err := manager.ListEnabled()
 			if err != nil {
@@ -55,9 +72,11 @@ func newRepoListCommand(commandName string, manager *repo.Manager, translator *i
 
 func newRepoAddCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
 	return &cobra.Command{
-		Use:   "add <name>",
-		Short: translator.T("repo_add_short", nil),
-		Args:  cobra.ExactArgs(1),
+		Use:     "add <name>",
+		Short:   translator.T("repo_add_short", nil),
+		Long:    translator.T("repo_add_long", map[string]any{"Command": commandName}),
+		Example: translator.T("repo_add_example", map[string]any{"Command": commandName}),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
 
@@ -88,9 +107,11 @@ func newRepoSyncCommand(commandName string, manager *repo.Manager, translator *i
 	var preflight bool
 
 	syncCmd := &cobra.Command{
-		Use:   "sync [name]",
-		Short: translator.T("repo_sync_short", nil),
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "sync [name]",
+		Short:   translator.T("repo_sync_short", nil),
+		Long:    translator.T("repo_sync_long", map[string]any{"Command": commandName}),
+		Example: translator.T("repo_sync_example", map[string]any{"Command": commandName}),
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				if preflight {
@@ -249,9 +270,11 @@ func newRepoRemoveCommand(commandName string, manager *repo.Manager, translator 
 	var force bool
 
 	removeCmd := &cobra.Command{
-		Use:   "remove <name>",
-		Short: translator.T("repo_remove_short", nil),
-		Args:  cobra.ExactArgs(1),
+		Use:     "remove <name>",
+		Short:   translator.T("repo_remove_short", nil),
+		Long:    translator.T("repo_remove_long", map[string]any{"Command": commandName}),
+		Example: translator.T("repo_remove_example", map[string]any{"Command": commandName}),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
 

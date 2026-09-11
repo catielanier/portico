@@ -31,6 +31,155 @@ other = "No output returned."
 [dependency_checking]
 other = "Checking dependencies..."
 
+[root_short]
+other = "A clearer CLI/TUI entrance to Gentoo Portage"
+
+[root_long]
+other = """Portico is a clearer CLI/TUI entrance to Gentoo Portage.
+
+It helps inspect packages, choose USE flags, resolve package-scoped Portage
+configuration changes, run package transactions, and manage enabled
+repositories/overlays without pretending Portage stopped being the source of
+truth.
+
+Portico does not replace emerge, equery, eselect, emaint, or the Gentoo Handbook.
+It gives you a safer front porch before walking into the house.
+
+Help routing:
+  portico --help
+  portico --help find
+  portico --help query
+  portico --help install
+  portico --help rebuild
+  portico --help update
+  portico --help repo
+  portico --help repo sync
+  portico --help overlay remove"""
+
+[root_example]
+other = """  portico find vlc
+  portico query media-video/vlc
+
+  sudo portico install media-video/vlc
+  sudo portico install media-video/vlc app-editors/emacs
+  sudo portico rebuild media-video/vlc
+  sudo portico update
+  sudo portico update media-video/vlc
+
+  portico repo list
+  sudo portico repo add guru
+  sudo portico repo sync
+  sudo portico repo sync --preflight
+  sudo portico repo remove guru
+
+  portico overlay list
+  sudo portico overlay add guru
+  sudo portico overlay sync
+  sudo portico overlay sync -p
+  sudo portico overlay remove guru
+
+  portico --version
+  portico -v"""
+
+[find_short]
+other = "Search for Portage packages"
+
+[find_long]
+other = """Search for Portage packages by name or description.
+
+This command uses Portage search data and displays matching package atoms.
+It is read-only and does not require root privileges.
+
+Portico may improve ranking and source display, but package names, descriptions,
+versions, and repository metadata come from the Gentoo system."""
+
+[find_example]
+other = """  portico find vlc
+  portico find ardour
+  portico find "video editor" """
+
+[query_short]
+other = "Inspect a Portage package"
+
+[query_long]
+other = """Inspect a Portage package.
+
+This command shows package USE flag information without installing or modifying
+anything. It is read-only and does not require root privileges.
+
+USE flag names and descriptions come from the Gentoo system and are displayed as
+provided by Portage tooling."""
+
+[query_example]
+other = """  portico query media-video/vlc
+  portico query media-sound/ardour
+  portico query app-editors/emacs"""
+
+[install_short]
+other = "Install Portage packages"
+
+[install_long]
+other = """Install one or more Portage packages.
+
+Portico creates a temporary Portage configuration sandbox, resolves package-scoped
+configuration changes there first, previews the calculated transaction, asks for
+confirmation, then writes approved package-scoped configuration before running
+the real emerge transaction.
+
+Portico may prompt for USE flags, testing keywords, licenses, and dependency
+configuration changes when Portage requires them.
+
+Portico does not modify global USE flags in make.conf and does not run emerge
+--ask. Portico's own confirmation is the confirmation step."""
+
+[install_example]
+other = """  sudo portico install media-video/vlc
+  sudo portico install media-sound/ardour
+  sudo portico install media-video/vlc app-editors/emacs
+  sudo portico install app-editors/emacs@30.1"""
+
+[rebuild_short]
+other = "Rebuild installed Portage packages"
+
+[rebuild_long]
+other = """Rebuild one or more Portage packages.
+
+Use rebuild when a package is already installed but you want to rebuild it with
+different package-scoped configuration.
+
+Portico resolves configuration changes in a temporary sandbox, previews the
+transaction, asks for confirmation, writes approved configuration, and then runs
+the real emerge transaction using --oneshot.
+
+Rebuild does not add rebuilt packages to @world and does not uninstall packages
+first."""
+
+[rebuild_example]
+other = """  sudo portico rebuild media-video/vlc
+  sudo portico rebuild media-sound/ardour
+  sudo portico rebuild app-editors/emacs@30.1"""
+
+[update_short]
+other = "Update Portage world or selected packages"
+
+[update_long]
+other = """Update installed packages.
+
+With no package arguments, Portico updates @world using emerge --update --deep
+--newuse @world.
+
+With package arguments, Portico updates only the selected package atoms using
+emerge --update --deep --newuse.
+
+The update flow previews the calculated transaction before running the real
+update. It can handle some package-scoped license requirements, but update-time
+USE autounmask changes are not fully supported yet."""
+
+[update_example]
+other = """  sudo portico update
+  sudo portico update media-video/vlc
+  sudo portico update media-video/vlc app-editors/emacs"""
+
 [will_install_atom]
 other = "install {{.Atom}}"
 
@@ -127,59 +276,50 @@ other = "Completed: {{.Completed}} / {{.Total}}"
 [install_progress_cancel_hint]
 other = "Press Ctrl+C to cancel."
 
-[joke.arch]
-other = "tell you, \"btw I use Arch.\""
+[repo_short]
+other = "Manage Portage repositories"
 
-[joke.lmgtfy]
-other = "provide you with a LMGTFY link"
+[overlay_short]
+other = "Manage Portage overlays"
 
-[joke.old_forum]
-other = "open a 2008 forum thread and call it documentation"
+[repo_long]
+other = """Manage enabled Portage repositories.
 
-[joke.judge_make_conf]
-other = "judge your make.conf out loud"
+`portico {{.Command}}` uses Gentoo's repository tooling as the source of truth.
+Enabled repositories are discovered from `eselect repository list -i`.
 
-[joke.ceiling_cat]
-other = "be Ceiling Cat"
+Portico does not treat `/var/db/repos` directories or Portico sync stamps as
+proof that a repository is enabled. Those are supporting filesystem/cache state
+only.
 
-[joke.init_flamewar]
-other = "start a flame war with you on your choice of init system"
+The `repo` and `overlay` commands are aliases for the same repository management
+behavior."""
 
-[joke.surprise_desktop]
-other = "install a desktop environment as a little surprise"
-
-[joke.alias_vim_to_nano]
-other = "alias vim to nano"
-
-[joke.just_use_ubuntu]
-other = "tell you to just use Ubuntu"
-
-[joke.mirror_stress_toy]
-other = "treat donated mirrors like a stress toy"
-
-[joke.just_use_rust]
-other = "tell you to \"just use Rust\""
-
-[joke.linkedin_rust]
-other = "automate posting on LinkedIn that you ported everything to Rust"
-
-[joke.wordpress_necromancy]
-other = "necromance your WordPress plugins"
-
-[joke.java_time_machine]
-other = "create a time machine to bring your enterprise stack to the current year"
-
-[joke.st_anger_snare]
-other = "replace your snare sample with St. Anger"
-
-[joke.bios_therapist]
-other = "become your BIOS therapist"
-
-[joke.overlay_goblins]
-other = "pretend overlays are not where the goblins keep their furniture"
+[repo_example]
+other = """  portico {{.Command}} list
+  sudo portico {{.Command}} add guru
+  sudo portico {{.Command}} sync
+  sudo portico {{.Command}} sync guru
+  sudo portico {{.Command}} sync --preflight
+  sudo portico {{.Command}} sync guru --preflight
+  sudo portico {{.Command}} sync -p
+  sudo portico {{.Command}} remove guru
+  sudo portico {{.Command}} remove guru --force"""
 
 [repo_list_short]
 other = "List enabled Portage repositories"
+
+[overlay_list_short]
+other = "List enabled Portage overlays"
+
+[repo_list_long]
+other = """List repositories currently enabled through Gentoo repository tooling.
+
+This command reads the enabled repository state from `eselect repository list -i`.
+It does not infer enabled repositories from directories under `/var/db/repos`."""
+
+[repo_list_example]
+other = """  portico {{.Command}} list"""
 
 [repo_list_heading]
 other = "Enabled repositories:"
@@ -189,6 +329,21 @@ other = "No enabled repositories found."
 
 [repo_add_short]
 other = "Enable and sync a Portage repository"
+
+[overlay_add_short]
+other = "Enable and sync a Portage overlay"
+
+[repo_add_long]
+other = """Enable a Portage repository and sync it.
+
+If the repository is already enabled, Portico leaves it enabled and syncs it.
+This makes the command safe to run repeatedly.
+
+After enabling, Portico verifies that the repository appears in Gentoo's enabled
+repository list before syncing it."""
+
+[repo_add_example]
+other = """  sudo portico {{.Command}} add guru"""
 
 [repo_add_privilege_action]
 other = "enable repository {{.Repository}}"
@@ -201,6 +356,33 @@ other = "Repository {{.Repository}} is enabled and synced."
 
 [repo_sync_short]
 other = "Sync enabled Portage repositories"
+
+[overlay_sync_short]
+other = "Sync enabled Portage overlays"
+
+[repo_sync_long]
+other = """Sync Portage repositories.
+
+With no repository name, this command force-syncs all currently enabled
+repositories.
+
+With a repository name, this command force-syncs exactly that enabled repository.
+
+Use `--preflight` or `-p` to perform mirror-friendly preflight sync behavior
+instead. Preflight sync only syncs repositories that Portico has never synced or
+that are stale according to Portico's sync stamp metadata.
+
+Explicit sync means sync now.
+Preflight sync means sync only if needed."""
+
+[repo_sync_example]
+other = """  sudo portico {{.Command}} sync
+  sudo portico {{.Command}} sync guru
+
+  sudo portico {{.Command}} sync --preflight
+  sudo portico {{.Command}} sync -p
+  sudo portico {{.Command}} sync guru --preflight
+  sudo portico {{.Command}} sync guru -p"""
 
 [repo_sync_privilege_action]
 other = "sync repository {{.Repository}}"
@@ -253,6 +435,26 @@ other = "Repository preflight sync complete. Synced: {{.Synced}}. Skipped: {{.Sk
 [repo_remove_short]
 other = "Disable a Portage repository"
 
+[overlay_remove_short]
+other = "Disable a Portage overlay"
+
+[repo_remove_long]
+other = """Disable an enabled Portage repository.
+
+Portico refuses to remove the protected `gentoo` repository.
+
+Before disabling a repository, Portico checks installed package metadata under
+`/var/db/pkg`. If installed packages came from the repository, removal is blocked
+unless `--force` is used.
+
+Portico does not delete repository files from `/var/db/repos`, does not delete
+package configuration, does not run depclean, and does not migrate installed
+packages automatically."""
+
+[repo_remove_example]
+other = """  sudo portico {{.Command}} remove guru
+  sudo portico {{.Command}} remove guru --force"""
+
 [repo_remove_privilege_action]
 other = "disable repository {{.Repository}}"
 
@@ -283,3 +485,53 @@ other = "Use `sudo portico {{.Command}} remove <name> --force` only if you under
 [repo_remove_forced_warning]
 other = "Warning: repository {{.Repository}} was disabled even though {{.Count}} installed package(s) came from it:"
 
+[joke.arch]
+other = "tell you, \"btw I use Arch.\""
+
+[joke.lmgtfy]
+other = "provide you with a LMGTFY link"
+
+[joke.old_forum]
+other = "open a 2008 forum thread and call it documentation"
+
+[joke.judge_make_conf]
+other = "judge your make.conf out loud"
+
+[joke.ceiling_cat]
+other = "be Ceiling Cat"
+
+[joke.init_flamewar]
+other = "start a flame war with you on your choice of init system"
+
+[joke.surprise_desktop]
+other = "install a desktop environment as a little surprise"
+
+[joke.alias_vim_to_nano]
+other = "alias vim to nano"
+
+[joke.just_use_ubuntu]
+other = "tell you to just use Ubuntu"
+
+[joke.mirror_stress_toy]
+other = "treat donated mirrors like a stress toy"
+
+[joke.just_use_rust]
+other = "tell you to \"just use Rust\""
+
+[joke.linkedin_rust]
+other = "automate posting on LinkedIn that you ported everything to Rust"
+
+[joke.wordpress_necromancy]
+other = "necromance your WordPress plugins"
+
+[joke.java_time_machine]
+other = "create a time machine to bring your enterprise stack to the current year"
+
+[joke.st_anger_snare]
+other = "replace your snare sample with St. Anger"
+
+[joke.bios_therapist]
+other = "become your BIOS therapist"
+
+[joke.overlay_goblins]
+other = "pretend overlays are not where the goblins keep their furniture"
