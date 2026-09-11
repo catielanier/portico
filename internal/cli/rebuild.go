@@ -1,6 +1,3 @@
-// internal/cli/rebuild.go
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 package cli
 
 import (
@@ -47,8 +44,9 @@ var rebuildCmd = &cobra.Command{
 		defer sandbox.Cleanup()
 
 		maskActions := NewInstallMaskActions()
+		requiredUseChanges := make([]portage.RequiredUseChange, 0)
 
-		if err := resolveInitialRebuildMasksInSandbox(atoms, sandbox, maskActions); err != nil {
+		if err := resolveInitialRebuildMasksInSandbox(atoms, sandbox, maskActions, &requiredUseChanges); err != nil {
 			return err
 		}
 
@@ -95,7 +93,7 @@ var rebuildCmd = &cobra.Command{
 			packageUsePaths = append(packageUsePaths, packageUsePath)
 		}
 
-		pretendResolution, err := resolveRebuildPretendProblemsInSandbox(atoms, sandbox, maskActions)
+		pretendResolution, err := resolveRebuildPretendProblemsInSandbox(atoms, sandbox, maskActions, requiredUseChanges)
 		if err != nil {
 			return err
 		}
@@ -169,6 +167,7 @@ func resolveInitialRebuildMasksInSandbox(
 	atoms []string,
 	sandbox *portage.ConfigSandbox,
 	maskActions *InstallMaskActions,
+	requiredUseChanges *[]portage.RequiredUseChange,
 ) error {
 	const maxAttempts = 8
 
@@ -196,7 +195,12 @@ func resolveInitialRebuildMasksInSandbox(
 			return initialPretendErr
 		}
 
-		if handled, err := resolveAutounmaskChangesInSandbox(initialPretendResult.Raw, sandbox, maskActions, nil); handled || err != nil {
+		if handled, err := resolveAutounmaskChangesInSandbox(
+			initialPretendResult.Raw,
+			sandbox,
+			maskActions,
+			requiredUseChanges,
+		); handled || err != nil {
 			if err != nil {
 				return err
 			}
@@ -221,10 +225,13 @@ func resolveRebuildPretendProblemsInSandbox(
 	atoms []string,
 	sandbox *portage.ConfigSandbox,
 	maskActions *InstallMaskActions,
+	existingRequiredUseChanges []portage.RequiredUseChange,
 ) (*PretendResolution, error) {
 	const maxAttempts = 8
 
-	resolution := &PretendResolution{}
+	resolution := &PretendResolution{
+		RequiredUseChanges: dedupeRequiredUseChanges(existingRequiredUseChanges),
+	}
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		var pretendResult *portage.PretendResult
@@ -246,10 +253,12 @@ func resolveRebuildPretendProblemsInSandbox(
 		resolution.Err = pretendErr
 
 		if pretendErr == nil {
+			resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 			return resolution, nil
 		}
 
 		if pretendResult == nil {
+			resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 			return resolution, nil
 		}
 
@@ -275,9 +284,11 @@ func resolveRebuildPretendProblemsInSandbox(
 			continue
 		}
 
+		resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 		return resolution, nil
 	}
 
+	resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 	return resolution, fmt.Errorf("emerge --pretend --oneshot did not resolve after %d attempts", maxAttempts)
 }
 

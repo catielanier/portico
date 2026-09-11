@@ -44,8 +44,9 @@ var installCmd = &cobra.Command{
 		defer sandbox.Cleanup()
 
 		maskActions := NewInstallMaskActions()
+		requiredUseChanges := make([]portage.RequiredUseChange, 0)
 
-		if err := resolveInitialInstallMasksInSandbox(atoms, sandbox, maskActions); err != nil {
+		if err := resolveInitialInstallMasksInSandbox(atoms, sandbox, maskActions, &requiredUseChanges); err != nil {
 			return err
 		}
 
@@ -92,7 +93,7 @@ var installCmd = &cobra.Command{
 			packageUsePaths = append(packageUsePaths, packageUsePath)
 		}
 
-		pretendResolution, err := resolvePretendProblemsInSandbox(atoms, sandbox, maskActions)
+		pretendResolution, err := resolvePretendProblemsInSandbox(atoms, sandbox, maskActions, requiredUseChanges)
 		if err != nil {
 			return err
 		}
@@ -212,6 +213,7 @@ func resolveInitialInstallMasksInSandbox(
 	atoms []string,
 	sandbox *portage.ConfigSandbox,
 	maskActions *InstallMaskActions,
+	requiredUseChanges *[]portage.RequiredUseChange,
 ) error {
 	const maxAttempts = 8
 
@@ -239,7 +241,12 @@ func resolveInitialInstallMasksInSandbox(
 			return initialPretendErr
 		}
 
-		if handled, err := resolveAutounmaskChangesInSandbox(initialPretendResult.Raw, sandbox, maskActions, nil); handled || err != nil {
+		if handled, err := resolveAutounmaskChangesInSandbox(
+			initialPretendResult.Raw,
+			sandbox,
+			maskActions,
+			requiredUseChanges,
+		); handled || err != nil {
 			if err != nil {
 				return err
 			}
@@ -264,10 +271,13 @@ func resolvePretendProblemsInSandbox(
 	atoms []string,
 	sandbox *portage.ConfigSandbox,
 	maskActions *InstallMaskActions,
+	existingRequiredUseChanges []portage.RequiredUseChange,
 ) (*PretendResolution, error) {
 	const maxAttempts = 8
 
-	resolution := &PretendResolution{}
+	resolution := &PretendResolution{
+		RequiredUseChanges: dedupeRequiredUseChanges(existingRequiredUseChanges),
+	}
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		var pretendResult *portage.PretendResult
@@ -289,10 +299,12 @@ func resolvePretendProblemsInSandbox(
 		resolution.Err = pretendErr
 
 		if pretendErr == nil {
+			resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 			return resolution, nil
 		}
 
 		if pretendResult == nil {
+			resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 			return resolution, nil
 		}
 
@@ -318,9 +330,11 @@ func resolvePretendProblemsInSandbox(
 			continue
 		}
 
+		resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 		return resolution, nil
 	}
 
+	resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 	return resolution, fmt.Errorf("emerge --pretend did not resolve after %d attempts", maxAttempts)
 }
 
@@ -399,16 +413,26 @@ func applyRequiredUseChangesInSandbox(
 	fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
 
 	for _, change := range changes {
+		cleanedFlags := cleanStringList(change.Flags)
+		if len(cleanedFlags) == 0 {
+			continue
+		}
+
 		if _, err := portage.WritePackageUseEntry(
 			sandbox.PortageConfigPath,
 			change.Atom,
-			change.Flags,
+			cleanedFlags,
 		); err != nil {
 			return err
 		}
 
 		if requiredUseChanges != nil {
-			*requiredUseChanges = append(*requiredUseChanges, change)
+			*requiredUseChanges = appendRequiredUseChangeUnique(*requiredUseChanges, portage.RequiredUseChange{
+				Atom:       change.Atom,
+				Flags:      cleanedFlags,
+				RequiredBy: change.RequiredBy,
+				Raw:        change.Raw,
+			})
 		}
 	}
 
@@ -810,6 +834,42 @@ func cleanStringList(values []string) []string {
 	return out
 }
 
+func appendRequiredUseChangeUnique(
+	changes []portage.RequiredUseChange,
+	change portage.RequiredUseChange,
+) []portage.RequiredUseChange {
+	change.Atom = strings.TrimSpace(change.Atom)
+	change.Flags = cleanStringList(change.Flags)
+
+	if change.Atom == "" || len(change.Flags) == 0 {
+		return changes
+	}
+
+	key := requiredUseChangeKey(change)
+
+	for _, existing := range changes {
+		if requiredUseChangeKey(existing) == key {
+			return changes
+		}
+	}
+
+	return append(changes, change)
+}
+
+func dedupeRequiredUseChanges(changes []portage.RequiredUseChange) []portage.RequiredUseChange {
+	var out []portage.RequiredUseChange
+
+	for _, change := range changes {
+		out = appendRequiredUseChangeUnique(out, change)
+	}
+
+	return out
+}
+
+func requiredUseChangeKey(change portage.RequiredUseChange) string {
+	return strings.TrimSpace(change.Atom) + " " + strings.Join(cleanStringList(change.Flags), " ")
+}
+
 func applyInstallConfigToSystem(
 	selectedFlagsByAtom map[string][]string,
 	maskActions *InstallMaskActions,
@@ -817,10 +877,11 @@ func applyInstallConfigToSystem(
 ) (*AppliedInstallConfig, error) {
 	applied := &AppliedInstallConfig{
 		SelectedFlagsByAtom: selectedFlagsByAtom,
-		RequiredUseChanges:  requiredUseChanges,
+		RequiredUseChanges:  dedupeRequiredUseChanges(requiredUseChanges),
 	}
 
 	for atom, selectedFlags := range selectedFlagsByAtom {
+		selectedFlags = cleanStringList(selectedFlags)
 		if len(selectedFlags) == 0 {
 			continue
 		}
@@ -837,7 +898,7 @@ func applyInstallConfigToSystem(
 		applied.PackageUsePath = path
 	}
 
-	for _, change := range requiredUseChanges {
+	for _, change := range applied.RequiredUseChanges {
 		path, err := portage.WritePackageUseEntry(
 			portage.SystemPortageConfigPath,
 			change.Atom,
@@ -1083,6 +1144,7 @@ func renderInstallMaskActions(actions *InstallMaskActions) {
 }
 
 func renderRequiredUseChanges(changes []portage.RequiredUseChange) {
+	changes = dedupeRequiredUseChanges(changes)
 	if len(changes) == 0 {
 		return
 	}
