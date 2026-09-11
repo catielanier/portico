@@ -52,6 +52,8 @@ Help routing:
   portico --help install
   portico --help rebuild
   portico --help update
+  portico --help uninstall
+  portico --help clean
   portico --help repo
   portico --help repo sync
   portico --help overlay remove"""
@@ -65,6 +67,8 @@ other = """  portico find vlc
   sudo portico rebuild media-video/vlc
   sudo portico update
   sudo portico update media-video/vlc
+  sudo portico uninstall media-video/vlc
+  sudo portico clean
 
   portico repo list
   sudo portico repo add guru
@@ -535,3 +539,62 @@ other = "become your BIOS therapist"
 
 [joke.overlay_goblins]
 other = "pretend overlays are not where the goblins keep their furniture"
+
+[uninstall_short]
+other = "Uninstall Portage packages"
+
+[uninstall_long]
+other = """Uninstall one or more Portage packages.
+
+This command runs `emerge --unmerge` for the requested package atoms.
+
+After the unmerge finishes, Portico asks whether to run `emerge --depclean` to
+remove packages that are no longer needed.
+
+Uninstall does not run depclean automatically. The depclean step only runs if you
+confirm it after the requested package atoms are unmerged."""
+
+[uninstall_example]
+other = """  sudo portico uninstall net-irc/irssi
+  sudo portico uninstall net-irc/irssi app-misc/tmux"""
+
+[uninstall_privilege_action]
+other = "uninstall packages"
+
+[uninstall_running]
+other = "Uninstalling {{.Atoms}}..."
+
+[uninstall_success]
+other = "Uninstalled {{.Atoms}}."
+
+[uninstall_depclean_prompt]
+other = "Run depclean now? [y/N]"
+
+[uninstall_depclean_skipped]
+other = "Depclean skipped."
+
+[clean_short]
+other = "Run Portage depclean"
+
+[clean_long]
+other = """Run Portage depclean.
+
+This command runs `emerge --depclean`.
+
+Use this after removing packages or when you want Portage to remove packages that
+are no longer needed by the world set or installed packages."""
+
+[clean_example]
+other = """  sudo portico clean"""
+
+[clean_privilege_action]
+other = "run depclean"
+
+[clean_running]
+other = "Running depclean..."
+
+[clean_success]
+other = "Depclean complete."
+
+[confirm_unrecognized_no]
+other = "Unrecognized response; treating as no."

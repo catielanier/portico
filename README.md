@@ -15,6 +15,8 @@ Portico helps with:
 - installing one or more packages
 - rebuilding one or more packages with revised USE flags
 - updating packages
+- uninstalling packages
+- cleaning unused packages with depclean
 - managing repositories / overlays
 
 Portico favors package-specific configuration and explicit confirmation before making system changes.
@@ -33,6 +35,7 @@ Portico will not:
 - globally accept licenses
 - overwrite user-managed Portage config without showing what it intends to do
 - run package mutations without root privileges
+- run depclean automatically after uninstalling unless you confirm it
 - treat donated mirrors like a stress toy
 
 Portico should make Gentoo package management easier to follow, not less transparent.
@@ -48,6 +51,8 @@ portico --help query
 portico --help install
 portico --help rebuild
 portico --help update
+portico --help uninstall
+portico --help clean
 portico --help repo
 portico --help repo sync
 portico --help overlay remove
@@ -217,6 +222,56 @@ With package arguments, Portico updates only the selected packages.
 Portico previews the transaction before running the update.
 
 Current limitation: update can handle some package-specific license requirements, but update-time USE autounmask changes are not fully supported yet.
+
+## Uninstall packages
+
+```sh
+sudo portico uninstall <atom...>
+```
+
+Uninstalls one or more packages using `emerge --unmerge`.
+
+Example:
+
+```sh
+sudo portico uninstall net-irc/irssi
+```
+
+Multiple packages can be uninstalled in one command:
+
+```sh
+sudo portico uninstall net-irc/irssi app-misc/tmux
+```
+
+Portico will:
+
+- run `emerge --unmerge <atom...>`
+- ask whether to run depclean afterward
+- run `emerge --depclean` only if confirmed
+
+Portico will not:
+
+- run depclean automatically
+- remove packages that were not included in the unmerge unless you confirm depclean
+- modify Portage config
+
+Use this when you know the package or packages you want removed.
+
+## Clean unused packages
+
+```sh
+sudo portico clean
+```
+
+Runs:
+
+```sh
+emerge --depclean
+```
+
+Use this to let Portage remove packages that are no longer needed by the world set or installed packages.
+
+`clean` does not take package arguments. It is a direct wrapper around Portage depclean behavior.
 
 ## Manage repositories
 

@@ -48,6 +48,8 @@ func init() {
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(rebuildCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(uninstallCmd)
+	rootCmd.AddCommand(cleanCmd)
 
 	rootCmd.AddCommand(newRepoCommand("repo", "Manage Portage repositories"))
 	rootCmd.AddCommand(newRepoCommand("overlay", "Manage Portage overlays"))

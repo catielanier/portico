@@ -149,6 +149,17 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "overlay",
 			},
 		},
+		"portico uninstall": {
+			ShortKey:   "uninstall_short",
+			LongKey:    "uninstall_long",
+			ExampleKey: "uninstall_example",
+		},
+
+		"portico clean": {
+			ShortKey:   "clean_short",
+			LongKey:    "clean_long",
+			ExampleKey: "clean_example",
+		},
 	}
 
 	applyCommandHelpRecursive(root, translator, helpByPath)
