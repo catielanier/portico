@@ -245,14 +245,17 @@ sudo portico uninstall net-irc/irssi app-misc/tmux
 
 Portico will:
 
-- run `emerge --unmerge <atom...>`
-- ask whether to run depclean afterward
-- run `emerge --depclean` only if confirmed
+- preview `emerge --unmerge <atom...>`
+- ask before uninstalling the requested package or packages
+- run `emerge --unmerge <atom...>` with a progress UI
+- surface Portage’s pre-removal countdown/waiting state
+- allow cancellation before and during the removal workflow
+- ask whether to start the clean workflow afterward
 
 Portico will not:
 
 - run depclean automatically
-- remove packages that were not included in the unmerge unless you confirm depclean
+- remove packages that were not included in the unmerge unless you confirm the later clean workflow
 - modify Portage config
 
 Use this when you know the package or packages you want removed.
@@ -263,7 +266,7 @@ Use this when you know the package or packages you want removed.
 sudo portico clean
 ```
 
-Runs:
+Previews and runs:
 
 ```sh
 emerge --depclean
@@ -271,7 +274,15 @@ emerge --depclean
 
 Use this to let Portage remove packages that are no longer needed by the world set or installed packages.
 
-`clean` does not take package arguments. It is a direct wrapper around Portage depclean behavior.
+Portico will:
+
+- preview `emerge --depclean`
+- ask before running the real depclean
+- run `emerge --depclean` with a progress UI
+- surface Portage’s pre-removal countdown/waiting state
+- allow cancellation before and during the cleanup workflow
+
+`clean` does not take package arguments. It is a Portico-managed wrapper around Portage depclean behavior.
 
 ## Manage repositories
 
@@ -460,13 +471,21 @@ Portico writes its own scoped config files under `/etc/portage`, such as:
 /etc/portage/package.license/90-portico
 ```
 
-When a package requires `~amd64`, Portico writes a package-specific keyword entry:
+When a package requires a keyword, Portico writes a package-specific keyword entry using the exact keyword token reported by Portage.
+
+For example:
 
 ```text
 media-video/obs-studio ~amd64
 ```
 
-It does not write:
+or on another architecture:
+
+```text
+dev-libs/example ~arm64
+```
+
+Portico does not write:
 
 ```text
 ACCEPT_KEYWORDS="~amd64"
@@ -523,6 +542,55 @@ sudo emerge app-portage/gentoolkit
 ```
 
 Repository management requires Gentoo repository tooling to be configured on the system.
+
+Portico is written in Go. It should compile anywhere Go supports, but Portico’s runtime behavior depends on Gentoo and Portage being available.
+
+## Contributions
+
+Contributions are welcome.
+
+Portico is still early, and help is especially useful in areas that make it clearer, safer, and more useful across different Gentoo systems.
+
+Good contribution areas include:
+
+- bug fixes
+- i18n translations
+- help text improvements
+- clearer command examples
+- Portage output parsing fixtures
+- non-amd64 architecture testing
+- USE flag picker usability
+- repository / overlay edge cases
+- documentation for real-world workflows
+- unit tests
+
+Bug fixes are especially welcome. Portico interacts with real system package management, so small correctness fixes matter a lot. If Portico parses Portage output incorrectly, writes config too broadly, misses an edge case, or explains a risky operation poorly, that is worth fixing.
+
+i18n help is also especially welcome. Portico’s user-facing text lives in:
+
+```text
+internal/i18n/locales/
+```
+
+The English locale is the source language:
+
+```text
+internal/i18n/locales/en.toml
+```
+
+Translations should preserve Portico’s tone: clear, cautious, and friendly, without hiding what Portage is doing.
+
+When adding or changing user-facing strings, prefer i18n keys over hardcoded text.
+
+Before submitting changes, run:
+
+```sh
+go fmt ./...
+go test ./...
+go build -o portico ./cmd/portico
+```
+
+Portico aims to support Gentoo users across architectures and setups, so reports from non-amd64 systems are very useful too.
 
 ## Development
 
