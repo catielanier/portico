@@ -1,6 +1,3 @@
-// internal/portage/masks.go
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 package portage
 
 import (
@@ -108,7 +105,7 @@ func classifyMaskReasons(reason string) []MaskReason {
 		case strings.Contains(lowerPart, "missing keyword"):
 			reasons = append(reasons, MaskReasonMissingKeyword)
 
-		case strings.Contains(lowerPart, "~") && strings.Contains(lowerPart, "keyword"):
+		case strings.Contains(lowerPart, "keyword"):
 			reasons = append(reasons, MaskReasonTestingKeyword)
 
 		case strings.Contains(lowerPart, "license"):
@@ -130,16 +127,47 @@ func extractRequiredKeyword(reason string) string {
 	parts := splitMaskReasonParts(reason)
 
 	for _, part := range parts {
-		fields := strings.Fields(part)
-
-		for _, field := range fields {
-			field = strings.TrimSpace(field)
-			field = strings.TrimSuffix(field, ",")
-
-			if strings.HasPrefix(field, "~") {
-				return field
-			}
+		keyword := extractRequiredKeywordFromReasonPart(part)
+		if keyword != "" {
+			return keyword
 		}
+	}
+
+	return ""
+}
+
+func extractRequiredKeywordFromReasonPart(part string) string {
+	part = strings.TrimSpace(part)
+	if part == "" {
+		return ""
+	}
+
+	lowerPart := strings.ToLower(part)
+	if strings.Contains(lowerPart, "missing keyword") {
+		return ""
+	}
+
+	fields := strings.Fields(part)
+	if len(fields) < 2 {
+		return ""
+	}
+
+	for i, field := range fields {
+		normalized := strings.ToLower(cleanMaskReasonToken(field))
+		if normalized != "keyword" && normalized != "keywords" {
+			continue
+		}
+
+		if i == 0 {
+			return ""
+		}
+
+		candidate := cleanMaskReasonToken(fields[i-1])
+		if candidate == "" {
+			return ""
+		}
+
+		return candidate
 	}
 
 	return ""
@@ -163,8 +191,7 @@ func extractRequiredLicenses(reason string) []string {
 		}
 
 		for _, token := range strings.Fields(cleaned) {
-			token = strings.TrimSpace(token)
-			token = strings.TrimSuffix(token, ",")
+			token = cleanMaskReasonToken(token)
 
 			if token == "" {
 				continue
@@ -180,6 +207,15 @@ func extractRequiredLicenses(reason string) []string {
 	}
 
 	return licenses
+}
+
+func cleanMaskReasonToken(token string) string {
+	token = strings.TrimSpace(token)
+	token = strings.TrimSuffix(token, ",")
+	token = strings.TrimSuffix(token, ";")
+	token = strings.TrimSuffix(token, ":")
+
+	return token
 }
 
 func stripLicenseSuffix(value string) string {
