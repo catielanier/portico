@@ -10,6 +10,9 @@ other = "Portico will not:"
 [confirm_continue]
 other = "Continue? [y/N]"
 
+[confirm_unrecognized_no]
+other = "Unrecognized response; treating as no."
+
 [common_confirm]
 other = "Confirm"
 
@@ -38,9 +41,9 @@ other = "A clearer CLI/TUI entrance to Gentoo Portage"
 other = """Portico is a clearer CLI/TUI entrance to Gentoo Portage.
 
 It helps inspect packages, choose USE flags, resolve package-scoped Portage
-configuration changes, run package transactions, and manage enabled
-repositories/overlays without pretending Portage stopped being the source of
-truth.
+configuration changes, run package transactions, remove packages, clean unused
+packages, and manage enabled repositories/overlays without pretending Portage
+stopped being the source of truth.
 
 Portico does not replace emerge, equery, eselect, emaint, or the Gentoo Handbook.
 It gives you a safer front porch before walking into the house.
@@ -183,6 +186,112 @@ USE autounmask changes are not fully supported yet."""
 other = """  sudo portico update
   sudo portico update media-video/vlc
   sudo portico update media-video/vlc app-editors/emacs"""
+
+[uninstall_short]
+other = "Uninstall Portage packages"
+
+[uninstall_long]
+other = """Uninstall one or more Portage packages.
+
+This command previews `emerge --unmerge` for the requested package atoms, asks for
+confirmation, and then runs the unmerge with a progress UI.
+
+After the unmerge finishes, Portico asks whether to start the clean workflow. If
+confirmed, Portico previews depclean, asks for depclean confirmation, and then
+runs `emerge --depclean`.
+
+Uninstall does not run depclean automatically."""
+
+[uninstall_example]
+other = """  sudo portico uninstall net-irc/irssi
+  sudo portico uninstall net-irc/irssi app-misc/tmux"""
+
+[uninstall_privilege_action]
+other = "uninstall packages"
+
+[uninstall_preview_heading]
+other = "Previewing uninstall for {{.Atoms}}..."
+
+[uninstall_confirm_prompt]
+other = "Uninstall {{.Atoms}}? [y/N]"
+
+[uninstall_cancelled]
+other = "Uninstall cancelled."
+
+[uninstall_progress_label]
+other = "Uninstalling {{.Atoms}}"
+
+[uninstall_success]
+other = "Uninstalled {{.Atoms}}."
+
+[uninstall_depclean_prompt]
+other = "Start clean workflow now? [y/N]"
+
+[uninstall_depclean_skipped]
+other = "Clean skipped."
+
+[clean_short]
+other = "Run Portage depclean"
+
+[clean_long]
+other = """Preview and run Portage depclean.
+
+This command previews `emerge --depclean`, asks for confirmation, and then runs
+depclean with a progress UI.
+
+Use this after removing packages or when you want Portage to remove packages that
+are no longer needed by the world set or installed packages."""
+
+[clean_example]
+other = """  sudo portico clean"""
+
+[clean_privilege_action]
+other = "run depclean"
+
+[clean_preview_heading]
+other = "Previewing depclean..."
+
+[clean_confirm_prompt]
+other = "Run depclean? [y/N]"
+
+[clean_cancelled]
+other = "Depclean cancelled."
+
+[clean_progress_label]
+other = "Running depclean"
+
+[clean_success]
+other = "Depclean complete."
+
+[cleanup_progress_preparing]
+other = "Preparing cleanup transaction..."
+
+[cleanup_progress_package_unavailable]
+other = "Package progress unavailable"
+
+[cleanup_progress_package_count]
+other = "Package {{.Current}} of {{.Total}}"
+
+[cleanup_progress_action]
+other = "{{.Spinner}} Removing {{.Package}}"
+
+[cleanup_progress_percent]
+other = "Progress: {{.Percent}}%"
+
+[cleanup_progress_completed]
+other = "Completed: {{.Completed}} / {{.Total}}"
+
+[cleanup_progress_cancel_hint]
+other = "Press Ctrl+C, Esc, q, or c to cancel."
+
+[cleanup_progress_waiting_title]
+other = "Portage is waiting before removal begins."
+
+[cleanup_progress_waiting_message]
+other = "Waiting for Portage countdown..."
+
+[cleanup_progress_waiting_hint]
+other = "Press Enter, Ctrl+C, Esc, q, or c to cancel before removal starts."
 
 [will_install_atom]
 other = "install {{.Atom}}"
@@ -539,62 +648,3 @@ other = "become your BIOS therapist"
 
 [joke.overlay_goblins]
 other = "pretend overlays are not where the goblins keep their furniture"
-
-[uninstall_short]
-other = "Uninstall Portage packages"
-
-[uninstall_long]
-other = """Uninstall one or more Portage packages.
-
-This command runs `emerge --unmerge` for the requested package atoms.
-
-After the unmerge finishes, Portico asks whether to run `emerge --depclean` to
-remove packages that are no longer needed.
-
-Uninstall does not run depclean automatically. The depclean step only runs if you
-confirm it after the requested package atoms are unmerged."""
-
-[uninstall_example]
-other = """  sudo portico uninstall net-irc/irssi
-  sudo portico uninstall net-irc/irssi app-misc/tmux"""
-
-[uninstall_privilege_action]
-other = "uninstall packages"
-
-[uninstall_running]
-other = "Uninstalling {{.Atoms}}..."
-
-[uninstall_success]
-other = "Uninstalled {{.Atoms}}."
-
-[uninstall_depclean_prompt]
-other = "Run depclean now? [y/N]"
-
-[uninstall_depclean_skipped]
-other = "Depclean skipped."
-
-[clean_short]
-other = "Run Portage depclean"
-
-[clean_long]
-other = """Run Portage depclean.
-
-This command runs `emerge --depclean`.
-
-Use this after removing packages or when you want Portage to remove packages that
-are no longer needed by the world set or installed packages."""
-
-[clean_example]
-other = """  sudo portico clean"""
-
-[clean_privilege_action]
-other = "run depclean"
-
-[clean_running]
-other = "Running depclean..."
-
-[clean_success]
-other = "Depclean complete."
-
-[confirm_unrecognized_no]
-other = "Unrecognized response; treating as no."

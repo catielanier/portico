@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/catielanier/portico/internal/i18n"
 	"github.com/catielanier/portico/internal/portage"
+	"github.com/catielanier/portico/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -26,31 +28,73 @@ func newUninstallCommand() *cobra.Command {
 				return err
 			}
 
-			return runUninstall(cmd, translator, args)
+			return runUninstallWorkflow(cmd, translator, args)
 		},
 	}
 }
 
-func runUninstall(cmd *cobra.Command, translator *i18n.Translator, atoms []string) error {
+func runUninstallWorkflow(cmd *cobra.Command, translator *i18n.Translator, atoms []string) error {
 	cleaner := portage.NewEmergeCleaner()
+	joinedAtoms := strings.Join(atoms, " ")
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("uninstall_running", map[string]any{
-		"Atoms": strings.Join(atoms, " "),
+	fmt.Fprintln(cmd.OutOrStdout(), translator.T("uninstall_preview_heading", map[string]any{
+		"Atoms": joinedAtoms,
 	}))
 
-	if err := cleaner.Unmerge(atoms); err != nil {
+	preview, err := cleaner.PretendUnmerge(atoms)
+	if preview != "" {
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintln(cmd.OutOrStdout(), preview)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	confirmed, err := confirmYesNo(cmd, translator, translator.T("uninstall_confirm_prompt", map[string]any{
+		"Atoms": joinedAtoms,
+	}))
+	if err != nil {
+		return err
+	}
+
+	if !confirmed {
+		fmt.Fprintln(cmd.OutOrStdout(), translator.T("uninstall_cancelled", nil))
+		return nil
+	}
+
+	total := portage.ParseCleanupTotal(preview)
+	if total == 0 {
+		total = len(atoms)
+	}
+
+	if err := ui.RunCleanupProgress(
+		translator.T("uninstall_progress_label", map[string]any{
+			"Atoms": joinedAtoms,
+		}),
+		portage.CleanupModeUnmerge,
+		total,
+		func(ctx context.Context, events chan<- ui.CleanupProgressEvent) error {
+			return cleaner.UnmergeContext(ctx, atoms, total, func(progress portage.CleanupProgress) {
+				events <- ui.CleanupProgressEvent{
+					Mode:           progress.Mode,
+					CurrentPackage: progress.CurrentPackage,
+					CurrentIndex:   progress.CurrentIndex,
+					Total:          progress.Total,
+					Waiting:        progress.Waiting,
+					Message:        progress.Message,
+				}
+			})
+		},
+	); err != nil {
 		return err
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), translator.T("uninstall_success", map[string]any{
-		"Atoms": strings.Join(atoms, " "),
+		"Atoms": joinedAtoms,
 	}))
 
-	runDepclean, err := confirmYesNo(
-		cmd,
-		translator,
-		translator.T("uninstall_depclean_prompt", nil),
-	)
+	runDepclean, err := confirmYesNo(cmd, translator, translator.T("uninstall_depclean_prompt", nil))
 	if err != nil {
 		return err
 	}
@@ -62,5 +106,5 @@ func runUninstall(cmd *cobra.Command, translator *i18n.Translator, atoms []strin
 
 	fmt.Fprintln(cmd.OutOrStdout())
 
-	return runClean(cmd, translator)
+	return runCleanWorkflow(cmd, translator)
 }

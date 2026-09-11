@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/catielanier/portico/internal/i18n"
 	"github.com/catielanier/portico/internal/portage"
+	"github.com/catielanier/portico/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -26,23 +28,55 @@ func newCleanCommand() *cobra.Command {
 				return err
 			}
 
-			return runClean(cmd, translator)
+			return runCleanWorkflow(cmd, translator)
 		},
 	}
 }
 
-func runClean(cmd *cobra.Command, translator *i18n.Translator) error {
+func runCleanWorkflow(cmd *cobra.Command, translator *i18n.Translator) error {
 	cleaner := portage.NewEmergeCleaner()
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("clean_running", nil))
+	fmt.Fprintln(cmd.OutOrStdout(), translator.T("clean_preview_heading", nil))
 
-	if err := cleaner.Depclean(); err != nil {
+	preview, err := cleaner.PretendDepclean()
+	if preview != "" {
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintln(cmd.OutOrStdout(), preview)
+	}
+
+	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("clean_success", nil))
+	confirmed, err := confirmYesNo(cmd, translator, translator.T("clean_confirm_prompt", nil))
+	if err != nil {
+		return err
+	}
 
-	return nil
+	if !confirmed {
+		fmt.Fprintln(cmd.OutOrStdout(), translator.T("clean_cancelled", nil))
+		return nil
+	}
+
+	total := portage.ParseCleanupTotal(preview)
+
+	return ui.RunCleanupProgress(
+		translator.T("clean_progress_label", nil),
+		portage.CleanupModeDepclean,
+		total,
+		func(ctx context.Context, events chan<- ui.CleanupProgressEvent) error {
+			return cleaner.DepcleanContext(ctx, total, func(progress portage.CleanupProgress) {
+				events <- ui.CleanupProgressEvent{
+					Mode:           progress.Mode,
+					CurrentPackage: progress.CurrentPackage,
+					CurrentIndex:   progress.CurrentIndex,
+					Total:          progress.Total,
+					Waiting:        progress.Waiting,
+					Message:        progress.Message,
+				}
+			})
+		},
+	)
 }
 
 func confirmYesNo(cmd *cobra.Command, translator *i18n.Translator, prompt string) (bool, error) {
