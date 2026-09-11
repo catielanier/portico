@@ -1,0 +1,164 @@
+name: Bug report
+description: Report something broken, confusing, unsafe, or incorrect in Portico.
+title: "[Bug]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a Portico bug.
+
+        Portico wraps real Gentoo package-management workflows, so small correctness issues matter. Please include enough detail for someone else to reproduce the problem safely.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      description: Please confirm what you checked first.
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I am reporting behavior from the latest available Portico version or current main branch.
+          required: false
+        - label: I understand Portico is early software and may still have rough edges.
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+      placeholder: Portico did X, but I expected Y.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command run
+      description: Paste the exact Portico command you ran.
+      render: shell
+      placeholder: sudo portico install media-video/vlc
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect Portico to do?
+      placeholder: I expected Portico to preview the transaction, ask for confirmation, then...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What did Portico actually do?
+      placeholder: Portico wrote..., failed with..., skipped..., showed...
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or error text
+      description: Paste relevant Portico, emerge, equery, emaint, or eselect output. Please remove secrets, private paths, hostnames, or anything sensitive.
+      render: text
+      placeholder: |
+        Paste output here.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Pick the closest area.
+      multiple: true
+      options:
+        - install
+        - rebuild
+        - update
+        - uninstall
+        - clean / depclean
+        - find
+        - query
+        - USE flag picker
+        - keyword handling
+        - license handling
+        - repository / overlay management
+        - sync behavior
+        - i18n / translations
+        - help text / docs
+        - build / packaging
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: portico-version
+    attributes:
+      label: Portico version
+      description: Output of `portico --version`, or commit hash if built from source.
+      placeholder: 0.5.3 or unstable / commit abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: gentoo-profile
+    attributes:
+      label: Gentoo profile
+      description: Output of `eselect profile show`, if relevant.
+      placeholder: default/linux/amd64/23.0/desktop
+    validations:
+      required: false
+
+  - type: input
+    id: architecture
+    attributes:
+      label: Architecture
+      description: Output of `uname -m`, or your Gentoo architecture keyword if known.
+      placeholder: x86_64 / amd64 / arm64 / riscv / ppc64
+    validations:
+      required: true
+
+  - type: textarea
+    id: portage-info
+    attributes:
+      label: Portage details
+      description: Include anything relevant from Portage, repositories, overlays, or package config.
+      render: text
+      placeholder: |
+        emerge --info
+        eselect repository list -i
+        relevant /etc/portage/package.use entries
+        relevant /etc/portage/package.accept_keywords entries
+        relevant /etc/portage/package.license entries
+    validations:
+      required: false
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest safe set of steps that reproduces the issue.
+      placeholder: |
+        1. Run `sudo portico ...`
+        2. Choose ...
+        3. Confirm ...
+        4. See error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Anything else that might help?
+      placeholder: This only happens with a never-synced overlay / non-amd64 arch / package with many USE flags / etc.
+    validations:
+      required: false

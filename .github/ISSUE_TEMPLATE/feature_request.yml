@@ -1,0 +1,92 @@
+name: Feature request
+description: Suggest a Portico improvement or workflow.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement.
+
+        Portico tries to make Portage workflows clearer and safer without hiding what Gentoo is doing. Please describe the workflow, not just the button.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: This request fits Portico's goal of wrapping common Portage workflows clearly and safely.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What are you trying to do?
+      placeholder: I want to..., but currently I have to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should Portico do?
+      placeholder: Portico should show..., ask..., write..., then run...
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety / transparency concerns
+      description: How should Portico avoid hiding risky Portage behavior?
+      placeholder: Portico should not silently modify make.conf / globally accept keywords / skip Portage warnings...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      multiple: true
+      options:
+        - install
+        - rebuild
+        - update
+        - uninstall
+        - clean / depclean
+        - find
+        - query
+        - USE flag picker
+        - keyword handling
+        - license handling
+        - repository / overlay management
+        - sync behavior
+        - i18n / translations
+        - help text / docs
+        - build / packaging
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else could solve this?
+      placeholder: This can currently be done manually with...
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, examples, screenshots, Portage output, or notes.
+    validations:
+      required: false

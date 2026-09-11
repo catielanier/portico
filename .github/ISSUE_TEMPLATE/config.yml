@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Questions / usage help
+    url: https://github.com/catielanier/portico/discussions
+    about: Please use Discussions for questions, setup help, or general Portico/Gentoo workflow discussion.
+
+  - name: Gentoo Handbook
+    url: https://wiki.gentoo.org/wiki/Handbook:Main_Page
+    about: For general Gentoo installation and system administration guidance, check the Gentoo Handbook.

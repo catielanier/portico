@@ -1,0 +1,67 @@
+name: Translation / i18n help
+description: Improve Portico translations or user-facing text.
+title: "[i18n]: "
+labels:
+  - i18n
+  - documentation
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping Portico speak more clearly.
+
+        User-facing strings should live in locale files instead of being hardcoded. The English source locale is `internal/i18n/locales/en.toml`.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type of i18n contribution
+      options:
+        - New translation
+        - Translation correction
+        - Help text improvement
+        - Tone / clarity improvement
+        - Hardcoded string report
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: locale
+    attributes:
+      label: Locale / language
+      description: Which locale or language is this about?
+      placeholder: fr, ja, ko, zh-Hans, zh-Hant, es, de...
+    validations:
+      required: false
+
+  - type: textarea
+    id: strings
+    attributes:
+      label: Affected strings
+      description: Paste the i18n keys, source text, or hardcoded strings involved.
+      render: text
+      placeholder: |
+        [install_short]
+        other = "Install Portage packages"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed wording
+      description: Paste the suggested translation or improved wording.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Explain nuance, tone, terminology, or anything reviewers should know.
+      placeholder: This keeps Portage terminology intact but sounds more natural in...
+    validations:
+      required: false
