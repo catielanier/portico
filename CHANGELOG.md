@@ -4,6 +4,101 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.5.2] - 2026-09-11
+
+### Added
+
+- Added cleanup progress UI for package removal workflows.
+  - New cleanup progress view for uninstall and depclean operations.
+  - Shows active package removal progress when Portage reports package counts.
+  - Shows completed package count and percentage when totals are available.
+  - Keeps the UI active while cleanup operations are running.
+
+- Added cancellable cleanup execution.
+  - Cleanup progress can be cancelled with `Ctrl+C`, `Esc`, `q`, or `c`.
+  - Cancellation propagates to the running Portage process through context cancellation.
+  - Portico now shows a cleanup-cancelled message when cancellation is requested.
+
+- Added Portage countdown detection for removal operations.
+  - Portico detects Portage’s pre-removal waiting/countdown output.
+  - The cleanup UI displays a waiting state before removal begins.
+  - The waiting state makes the final cancellation window visible in Portico’s UI instead of leaving it hidden in raw Portage output.
+
+- Added preview-and-confirm flow for uninstall.
+  - `sudo portico uninstall <atom...>` now previews `emerge --pretend --unmerge <atom...>`.
+  - Portico asks for confirmation before running `emerge --unmerge`.
+  - The actual unmerge runs through the cleanup progress UI.
+
+- Added preview-and-confirm flow for clean.
+  - `sudo portico clean` now previews `emerge --pretend --depclean`.
+  - Portico asks for confirmation before running `emerge --depclean`.
+  - The actual depclean runs through the cleanup progress UI.
+
+### Changed
+
+- Post-uninstall depclean now uses the full clean workflow.
+  - After uninstall finishes, Portico asks whether to start the clean workflow.
+  - If confirmed, Portico previews depclean first.
+  - Portico then asks for depclean confirmation before running it.
+  - Post-uninstall depclean no longer jumps directly into `emerge --depclean`.
+
+- Uninstall and clean now follow the same Portico interaction pattern as package installation.
+  - Preview the Portage operation.
+  - Ask for confirmation.
+  - Run the real operation with a progress UI.
+  - Surface cancellation clearly.
+
+- Clean command behavior is now explicit.
+  - `sudo portico clean` is a Portico-managed wrapper around `emerge --depclean`.
+  - It does not take package arguments.
+
+### Internal
+
+- Added `internal/ui/cleanprogress.go`.
+  - Provides `RunCleanupProgress`.
+  - Provides `CleanupProgressEvent`.
+  - Handles progress display, spinner updates, waiting/countdown state, completion, and cancellation.
+
+- Added cleanup support in the Portage layer.
+  - `PretendUnmerge()` runs `emerge --pretend --unmerge <atom...>`.
+  - `PretendDepclean()` runs `emerge --pretend --depclean`.
+  - `UnmergeContext()` runs `emerge --unmerge <atom...>` with progress callbacks.
+  - `DepcleanContext()` runs `emerge --depclean` with progress callbacks.
+
+- Added cleanup output parsing.
+  - Parses `>>> Unmerging (N of M)` progress lines.
+  - Detects Portage waiting/countdown output.
+  - Parses cleanup totals from pretend output when available.
+  - Keeps a short tail of Portage output for failure messages.
+
+- Added i18n keys for cleanup progress UI.
+  - Cleanup preparing state.
+  - Package count.
+  - Progress percentage.
+  - Completed count.
+  - Cancel hint.
+  - Waiting/countdown state.
+  - Cleanup cancelled state.
+
+### Fixed
+
+- Fixed post-uninstall depclean flow bypassing preview.
+  - Depclean after uninstall now behaves exactly like running `sudo portico clean`.
+
+- Fixed uninstall/clean UX being too raw compared with install.
+  - Removal operations now have Portico-owned preview, confirmation, progress, and cancellation behavior.
+
+### Known issues
+
+- Cleanup progress depends on Portage output shape and may show limited progress if Portage does not emit parseable package counts.
+- `uninstall` does not remove Portico-managed package configuration entries for removed atoms.
+- `clean` does not accept package arguments.
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- Unit tests still need to be added for uninstall, clean, cleanup progress parsing, countdown detection, cancellation behavior, and routed help.
+
 ## [0.5.1] - 2026-09-11
 
 ### Added
