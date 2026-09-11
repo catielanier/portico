@@ -200,7 +200,7 @@ other = "Ensuring repository {{.Repository}} is enabled and synced..."
 other = "Repository {{.Repository}} is enabled and synced."
 
 [repo_sync_short]
-other = "Sync an enabled Portage repository"
+other = "Sync enabled Portage repositories"
 
 [repo_sync_privilege_action]
 other = "sync repository {{.Repository}}"
@@ -210,6 +210,45 @@ other = "Syncing repository {{.Repository}}..."
 
 [repo_sync_success]
 other = "Repository {{.Repository}} synced."
+
+[repo_sync_all_privilege_action]
+other = "sync enabled repositories"
+
+[repo_sync_all_start]
+other = "Syncing all enabled repositories..."
+
+[repo_sync_all_empty]
+other = "No enabled repositories found."
+
+[repo_sync_all_synced]
+other = "Synced repository {{.Repository}}."
+
+[repo_sync_all_success]
+other = "Repository sync complete. Synced: {{.Synced}}."
+
+[repo_sync_preflight_help]
+other = "Only sync repositories that are never-synced or stale"
+
+[repo_sync_preflight_privilege_action]
+other = "preflight sync repository {{.Repository}}"
+
+[repo_sync_preflight_start]
+other = "Checking repository {{.Repository}} for preflight sync..."
+
+[repo_sync_preflight_synced]
+other = "Synced repository {{.Repository}} because it was {{.Reason}}."
+
+[repo_sync_preflight_skipped]
+other = "Skipped repository {{.Repository}} because it was already fresh."
+
+[repo_sync_all_preflight_privilege_action]
+other = "preflight sync enabled repositories"
+
+[repo_sync_all_preflight_start]
+other = "Checking enabled repositories for preflight sync..."
+
+[repo_sync_all_preflight_success]
+other = "Repository preflight sync complete. Synced: {{.Synced}}. Skipped: {{.Skipped}}."
 
 [repo_remove_short]
 other = "Disable a Portage repository"
@@ -234,3 +273,4 @@ other = "  ...and {{.Count}} more"
 
 [repo_remove_force_hint]
 other = "Use `sudo portico {{.Command}} remove <name> --force` only if you understand the consequences."
+
