@@ -195,8 +195,8 @@ type AppliedInstallConfig struct {
 }
 
 type PretendResolution struct {
-	Result              *portage.PretendResult
-	Err                 error
+	Result             *portage.PretendResult
+	Err                error
 	RequiredUseChanges []portage.RequiredUseChange
 }
 

@@ -14,7 +14,7 @@ type RequiredUseChange struct {
 
 type RequiredKeywordChange struct {
 	Atom       string
-	Keywords  []string
+	Keywords   []string
 	RequiredBy []string
 	Raw        string
 }
@@ -175,7 +175,7 @@ func parseRequiredKeywordChanges(raw string) []RequiredKeywordChange {
 
 		changes = append(changes, RequiredKeywordChange{
 			Atom:       atom,
-			Keywords:  keywords,
+			Keywords:   keywords,
 			RequiredBy: append([]string(nil), requiredBy...),
 			Raw:        trimmed,
 		})

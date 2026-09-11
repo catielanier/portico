@@ -35,7 +35,7 @@ type SyncDecision struct {
 	Repository string
 	ShouldSync bool
 	Reason     SyncReason
-	LastSynced  *time.Time
+	LastSynced *time.Time
 }
 
 type SyncReason string
@@ -180,7 +180,7 @@ func (m *Manager) SyncEnabled() ([]SyncDecision, error) {
 			Repository: repository.Name,
 			ShouldSync: true,
 			Reason:     SyncReasonManual,
-			LastSynced:  &now,
+			LastSynced: &now,
 		})
 	}
 
@@ -241,7 +241,7 @@ func (m *Manager) SyncDecision(name string, staleAfter time.Duration) (SyncDecis
 			Repository: name,
 			ShouldSync: true,
 			Reason:     SyncReasonNeverSynced,
-			LastSynced:  nil,
+			LastSynced: nil,
 		}, nil
 	}
 
@@ -250,7 +250,7 @@ func (m *Manager) SyncDecision(name string, staleAfter time.Duration) (SyncDecis
 			Repository: name,
 			ShouldSync: true,
 			Reason:     SyncReasonStale,
-			LastSynced:  &lastSynced,
+			LastSynced: &lastSynced,
 		}, nil
 	}
 
@@ -258,7 +258,7 @@ func (m *Manager) SyncDecision(name string, staleAfter time.Duration) (SyncDecis
 		Repository: name,
 		ShouldSync: false,
 		Reason:     SyncReasonNotNeeded,
-		LastSynced:  &lastSynced,
+		LastSynced: &lastSynced,
 	}, nil
 }
 

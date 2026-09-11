@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	defaultTerminalWidth   = 80
-	defaultTerminalHeight  = 24
+	defaultTerminalWidth  = 80
+	defaultTerminalHeight = 24
 	minFlagsPerPage       = 1
 	usePickerReservedRows = 18
 	descriptionMaxRows    = 4
@@ -29,7 +29,7 @@ const (
 )
 
 type UsePickerModel struct {
-	Atom        string
+	Atom       string
 	Selections []useflags.FlagSelection
 	Translator *i18n.Translator
 
