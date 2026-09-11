@@ -1,320 +1,608 @@
-package cli
+package repo
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
-
-	"github.com/catielanier/portico/internal/i18n"
-	"github.com/catielanier/portico/internal/repo"
-	"github.com/spf13/cobra"
+	"time"
 )
 
-func newRepoCommand(commandName string, short string) *cobra.Command {
-	manager := repo.NewManager()
-	translator := i18n.MustDefault()
+const (
+	installedPackageDatabasePath = "/var/db/pkg"
+	syncStampDirectory           = "/var/cache/portico/repo-sync"
+	defaultSyncStaleAfter        = 24 * time.Hour
+)
 
-	cmd := &cobra.Command{
-		Use:   commandName,
-		Short: short,
-	}
+var ErrRepositoryNotEnabled = errors.New("repository is not enabled")
 
-	cmd.AddCommand(newRepoListCommand(commandName, manager, translator))
-	cmd.AddCommand(newRepoAddCommand(commandName, manager, translator))
-	cmd.AddCommand(newRepoSyncCommand(commandName, manager, translator))
-	cmd.AddCommand(newRepoRemoveCommand(commandName, manager, translator))
-
-	return cmd
+type Repository struct {
+	Name string
+	Raw  string
 }
 
-func newRepoListCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: translator.T("repo_list_short", nil),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			repositories, err := manager.ListEnabled()
-			if err != nil {
-				return err
-			}
-
-			if len(repositories) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_list_empty", nil))
-				return nil
-			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_list_heading", nil))
-
-			for _, repository := range repositories {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", repository.Name)
-			}
-
-			return nil
-		},
-	}
+type InstalledPackage struct {
+	Atom       string
+	Repository string
+	Path       string
 }
 
-func newRepoAddCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
-	return &cobra.Command{
-		Use:   "add <name>",
-		Short: translator.T("repo_add_short", nil),
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			name := strings.TrimSpace(args[0])
-
-			if err := requireRoot(translator.T("repo_add_privilege_action", map[string]any{
-				"Repository": name,
-			})); err != nil {
-				return err
-			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_add_enabling", map[string]any{
-				"Repository": name,
-			}))
-
-			if err := manager.Add(name); err != nil {
-				return err
-			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_add_success", map[string]any{
-				"Repository": name,
-			}))
-
-			return nil
-		},
-	}
+type SyncDecision struct {
+	Repository string
+	ShouldSync bool
+	Reason     SyncReason
+	LastSynced  *time.Time
 }
 
-func newRepoSyncCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
-	var preflight bool
+type SyncReason string
 
-	syncCmd := &cobra.Command{
-		Use:   "sync [name]",
-		Short: translator.T("repo_sync_short", nil),
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				if preflight {
-					return runRepoSyncAllPreflight(cmd, manager, translator)
-				}
+const (
+	SyncReasonManual      SyncReason = "manual"
+	SyncReasonNotNeeded   SyncReason = "not-needed"
+	SyncReasonNeverSynced SyncReason = "never-synced"
+	SyncReasonStale       SyncReason = "stale"
+)
 
-				return runRepoSyncAll(cmd, manager, translator)
-			}
-
-			name := strings.TrimSpace(args[0])
-			if preflight {
-				return runRepoSyncOnePreflight(cmd, manager, translator, name)
-			}
-
-			return runRepoSyncOne(cmd, manager, translator, name)
-		},
-	}
-
-	syncCmd.Flags().BoolVarP(
-		&preflight,
-		"preflight",
-		"p",
-		false,
-		translator.T("repo_sync_preflight_help", nil),
-	)
-
-	return syncCmd
+type RemoveResult struct {
+	Repository        string
+	Forced            bool
+	InstalledPackages []InstalledPackage
 }
 
-func runRepoSyncOne(cmd *cobra.Command, manager *repo.Manager, translator *i18n.Translator, name string) error {
-	if err := requireRoot(translator.T("repo_sync_privilege_action", map[string]any{
-		"Repository": name,
-	})); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_start", map[string]any{
-		"Repository": name,
-	}))
-
-	if err := manager.Sync(name); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_success", map[string]any{
-		"Repository": name,
-	}))
-
-	return nil
+type ProtectedRepositoryError struct {
+	Repository string
 }
 
-func runRepoSyncAll(cmd *cobra.Command, manager *repo.Manager, translator *i18n.Translator) error {
-	if err := requireRoot(translator.T("repo_sync_all_privilege_action", nil)); err != nil {
-		return err
+func (e *ProtectedRepositoryError) Error() string {
+	return fmt.Sprintf("repository %s is protected and cannot be removed", e.Repository)
+}
+
+type RepositoryInUseError struct {
+	Repository string
+	Packages   []InstalledPackage
+}
+
+func (e *RepositoryInUseError) Error() string {
+	return fmt.Sprintf("repository %s has installed packages", e.Repository)
+}
+
+type Manager struct{}
+
+func NewManager() *Manager {
+	return &Manager{}
+}
+
+func (m *Manager) ListEnabled() ([]Repository, error) {
+	output, err := runCommand("eselect", "repository", "list", "-i")
+	if err != nil {
+		return nil, err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_start", nil))
+	repositories := parseEselectRepositoryList(output)
 
-	decisions, err := manager.SyncEnabled()
+	sort.Slice(repositories, func(i int, j int) bool {
+		return repositories[i].Name < repositories[j].Name
+	})
+
+	return repositories, nil
+}
+
+func (m *Manager) IsEnabled(name string) (bool, error) {
+	name, err := normalizeRepositoryName(name)
+	if err != nil {
+		return false, err
+	}
+
+	repositories, err := m.ListEnabled()
+	if err != nil {
+		return false, err
+	}
+
+	for _, repository := range repositories {
+		if repository.Name == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (m *Manager) Add(name string) error {
+	name, err := normalizeRepositoryName(name)
 	if err != nil {
 		return err
 	}
 
-	if len(decisions) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_empty", nil))
-		return nil
-	}
-
-	for _, decision := range decisions {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_synced", map[string]any{
-			"Repository": decision.Repository,
-		}))
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_success", map[string]any{
-		"Synced": len(decisions),
-	}))
-
-	return nil
-}
-
-func runRepoSyncOnePreflight(cmd *cobra.Command, manager *repo.Manager, translator *i18n.Translator, name string) error {
-	if err := requireRoot(translator.T("repo_sync_preflight_privilege_action", map[string]any{
-		"Repository": name,
-	})); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_preflight_start", map[string]any{
-		"Repository": name,
-	}))
-
-	decision, err := manager.SyncIfNeeded(name, 0)
+	enabled, err := m.IsEnabled(name)
 	if err != nil {
 		return err
 	}
 
-	renderSyncDecision(cmd, translator, decision)
-
-	return nil
-}
-
-func runRepoSyncAllPreflight(cmd *cobra.Command, manager *repo.Manager, translator *i18n.Translator) error {
-	if err := requireRoot(translator.T("repo_sync_all_preflight_privilege_action", nil)); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_preflight_start", nil))
-
-	decisions, err := manager.SyncEnabledIfNeeded(0)
-	if err != nil {
-		return err
-	}
-
-	if len(decisions) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_empty", nil))
-		return nil
-	}
-
-	syncedCount := 0
-	skippedCount := 0
-
-	for _, decision := range decisions {
-		if decision.ShouldSync {
-			syncedCount++
-		} else {
-			skippedCount++
+	if !enabled {
+		if _, err := runCommand("eselect", "repository", "enable", name); err != nil {
+			return err
 		}
 
-		renderSyncDecision(cmd, translator, decision)
+		enabled, err = m.IsEnabled(name)
+		if err != nil {
+			return err
+		}
+
+		if !enabled {
+			return fmt.Errorf("repository %s was enabled but does not appear in enabled repository list", name)
+		}
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_preflight_success", map[string]any{
-		"Synced":  syncedCount,
-		"Skipped": skippedCount,
-	}))
+	return m.Sync(name)
+}
+
+func (m *Manager) Sync(name string) error {
+	name, err := normalizeRepositoryName(name)
+	if err != nil {
+		return err
+	}
+
+	enabled, err := m.IsEnabled(name)
+	if err != nil {
+		return err
+	}
+
+	if !enabled {
+		return fmt.Errorf("%w: %s", ErrRepositoryNotEnabled, name)
+	}
+
+	if _, err := runCommand("emaint", "sync", "-r", name); err != nil {
+		return err
+	}
+
+	return writeSyncStamp(name, time.Now())
+}
+
+func (m *Manager) SyncEnabled() ([]SyncDecision, error) {
+	repositories, err := m.ListEnabled()
+	if err != nil {
+		return nil, err
+	}
+
+	decisions := make([]SyncDecision, 0, len(repositories))
+
+	for _, repository := range repositories {
+		if err := m.Sync(repository.Name); err != nil {
+			return decisions, err
+		}
+
+		now := time.Now()
+		decisions = append(decisions, SyncDecision{
+			Repository: repository.Name,
+			ShouldSync: true,
+			Reason:     SyncReasonManual,
+			LastSynced:  &now,
+		})
+	}
+
+	return decisions, nil
+}
+
+func (m *Manager) SyncIfNeeded(name string, staleAfter time.Duration) (SyncDecision, error) {
+	name, err := normalizeRepositoryName(name)
+	if err != nil {
+		return SyncDecision{}, err
+	}
+
+	decision, err := m.SyncDecision(name, staleAfter)
+	if err != nil {
+		return SyncDecision{}, err
+	}
+
+	if !decision.ShouldSync {
+		return decision, nil
+	}
+
+	if err := m.Sync(name); err != nil {
+		return decision, err
+	}
+
+	now := time.Now()
+	decision.LastSynced = &now
+
+	return decision, nil
+}
+
+func (m *Manager) SyncDecision(name string, staleAfter time.Duration) (SyncDecision, error) {
+	name, err := normalizeRepositoryName(name)
+	if err != nil {
+		return SyncDecision{}, err
+	}
+
+	if staleAfter <= 0 {
+		staleAfter = defaultSyncStaleAfter
+	}
+
+	enabled, err := m.IsEnabled(name)
+	if err != nil {
+		return SyncDecision{}, err
+	}
+
+	if !enabled {
+		return SyncDecision{}, fmt.Errorf("%w: %s", ErrRepositoryNotEnabled, name)
+	}
+
+	lastSynced, ok, err := readSyncStamp(name)
+	if err != nil {
+		return SyncDecision{}, err
+	}
+
+	if !ok {
+		return SyncDecision{
+			Repository: name,
+			ShouldSync: true,
+			Reason:     SyncReasonNeverSynced,
+			LastSynced:  nil,
+		}, nil
+	}
+
+	if time.Since(lastSynced) >= staleAfter {
+		return SyncDecision{
+			Repository: name,
+			ShouldSync: true,
+			Reason:     SyncReasonStale,
+			LastSynced:  &lastSynced,
+		}, nil
+	}
+
+	return SyncDecision{
+		Repository: name,
+		ShouldSync: false,
+		Reason:     SyncReasonNotNeeded,
+		LastSynced:  &lastSynced,
+	}, nil
+}
+
+func (m *Manager) SyncEnabledIfNeeded(staleAfter time.Duration) ([]SyncDecision, error) {
+	if staleAfter <= 0 {
+		staleAfter = defaultSyncStaleAfter
+	}
+
+	repositories, err := m.ListEnabled()
+	if err != nil {
+		return nil, err
+	}
+
+	decisions := make([]SyncDecision, 0, len(repositories))
+
+	for _, repository := range repositories {
+		decision, err := m.SyncIfNeeded(repository.Name, staleAfter)
+		if err != nil {
+			return decisions, err
+		}
+
+		decisions = append(decisions, decision)
+	}
+
+	return decisions, nil
+}
+
+func (m *Manager) Remove(name string, force bool) (*RemoveResult, error) {
+	name, err := normalizeRepositoryName(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if isProtectedRepository(name) {
+		return nil, &ProtectedRepositoryError{
+			Repository: name,
+		}
+	}
+
+	enabled, err := m.IsEnabled(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if !enabled {
+		return nil, fmt.Errorf("%w: %s", ErrRepositoryNotEnabled, name)
+	}
+
+	installedPackages, err := InstalledPackagesFromRepository(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(installedPackages) > 0 && !force {
+		return nil, &RepositoryInUseError{
+			Repository: name,
+			Packages:   installedPackages,
+		}
+	}
+
+	if _, err := runCommand("eselect", "repository", "disable", name); err != nil {
+		return nil, err
+	}
+
+	stillEnabled, err := m.IsEnabled(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if stillEnabled {
+		return nil, fmt.Errorf("repository %s was disabled but still appears in enabled repository list", name)
+	}
+
+	if err := deleteSyncStamp(name); err != nil {
+		return nil, err
+	}
+
+	return &RemoveResult{
+		Repository:        name,
+		Forced:            force && len(installedPackages) > 0,
+		InstalledPackages: installedPackages,
+	}, nil
+}
+
+func InstalledPackagesFromRepository(repository string) ([]InstalledPackage, error) {
+	repository, err := normalizeRepositoryName(repository)
+	if err != nil {
+		return nil, err
+	}
+
+	var packages []InstalledPackage
+
+	err = filepath.WalkDir(installedPackageDatabasePath, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		if entry.IsDir() {
+			return nil
+		}
+
+		if entry.Name() != "repository" {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		sourceRepository := strings.TrimSpace(string(data))
+		if sourceRepository != repository {
+			return nil
+		}
+
+		packagePath := filepath.Dir(path)
+		packageAtom, err := installedPackageAtomFromPath(packagePath)
+		if err != nil {
+			return err
+		}
+
+		packages = append(packages, InstalledPackage{
+			Atom:       packageAtom,
+			Repository: sourceRepository,
+			Path:       packagePath,
+		})
+
+		return nil
+	})
+
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(packages, func(i int, j int) bool {
+		return packages[i].Atom < packages[j].Atom
+	})
+
+	return packages, nil
+}
+
+func installedPackageAtomFromPath(packagePath string) (string, error) {
+	relativePath, err := filepath.Rel(installedPackageDatabasePath, packagePath)
+	if err != nil {
+		return "", err
+	}
+
+	parts := strings.Split(relativePath, string(os.PathSeparator))
+	if len(parts) != 2 {
+		return "", fmt.Errorf("unexpected installed package path: %s", packagePath)
+	}
+
+	return parts[0] + "/" + parts[1], nil
+}
+
+func parseEselectRepositoryList(output string) []Repository {
+	lines := strings.Split(output, "\n")
+
+	var repositories []Repository
+	seen := make(map[string]bool)
+
+	for _, line := range lines {
+		repository, ok := parseEselectRepositoryListLine(line)
+		if !ok {
+			continue
+		}
+
+		if seen[repository.Name] {
+			continue
+		}
+
+		seen[repository.Name] = true
+		repositories = append(repositories, repository)
+	}
+
+	return repositories
+}
+
+func parseEselectRepositoryListLine(line string) (Repository, bool) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return Repository{}, false
+	}
+
+	if !strings.Contains(trimmed, "]") {
+		return Repository{}, false
+	}
+
+	afterBracket := trimmed[strings.Index(trimmed, "]")+1:]
+	afterBracket = strings.TrimSpace(afterBracket)
+	if afterBracket == "" {
+		return Repository{}, false
+	}
+
+	fields := strings.Fields(afterBracket)
+	if len(fields) == 0 {
+		return Repository{}, false
+	}
+
+	name := strings.TrimSpace(fields[0])
+	name = strings.TrimSuffix(name, "*")
+	name = strings.TrimSpace(name)
+
+	if name == "" {
+		return Repository{}, false
+	}
+
+	if strings.HasPrefix(name, "[") {
+		return Repository{}, false
+	}
+
+	return Repository{
+		Name: name,
+		Raw:  trimmed,
+	}, true
+}
+
+func normalizeRepositoryName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+
+	if name == "" {
+		return "", fmt.Errorf("repository name is required")
+	}
+
+	if strings.ContainsRune(name, os.PathSeparator) {
+		return "", fmt.Errorf("repository name must not contain path separators: %s", name)
+	}
+
+	if strings.Contains(name, "\x00") {
+		return "", fmt.Errorf("repository name must not contain null bytes")
+	}
+
+	if name == "." || name == ".." {
+		return "", fmt.Errorf("invalid repository name: %s", name)
+	}
+
+	return name, nil
+}
+
+func isProtectedRepository(name string) bool {
+	switch name {
+	case "gentoo":
+		return true
+	default:
+		return false
+	}
+}
+
+func syncStampPath(repository string) (string, error) {
+	repository, err := normalizeRepositoryName(repository)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(syncStampDirectory, repository), nil
+}
+
+func writeSyncStamp(repository string, syncedAt time.Time) error {
+	path, err := syncStampPath(repository)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	value := syncedAt.UTC().Format(time.RFC3339) + "\n"
+	tempPath := path + ".tmp"
+
+	if err := os.WriteFile(tempPath, []byte(value), 0o644); err != nil {
+		return err
+	}
+
+	return os.Rename(tempPath, path)
+}
+
+func readSyncStamp(repository string) (time.Time, bool, error) {
+	path, err := syncStampPath(repository)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return time.Time{}, false, nil
+	}
+
+	if err != nil {
+		return time.Time{}, false, err
+	}
+
+	value := strings.TrimSpace(string(data))
+	if value == "" {
+		return time.Time{}, false, nil
+	}
+
+	syncedAt, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("invalid sync stamp for repository %s: %w", repository, err)
+	}
+
+	return syncedAt, true, nil
+}
+
+func deleteSyncStamp(repository string) error {
+	path, err := syncStampPath(repository)
+	if err != nil {
+		return err
+	}
+
+	if err := os.Remove(path); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func renderSyncDecision(cmd *cobra.Command, translator *i18n.Translator, decision repo.SyncDecision) {
-	if decision.ShouldSync {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_preflight_synced", map[string]any{
-			"Repository": decision.Repository,
-			"Reason":     string(decision.Reason),
-		}))
-		return
-	}
+func runCommand(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_preflight_skipped", map[string]any{
-		"Repository": decision.Repository,
-	}))
-}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 
-func newRepoRemoveCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
-	var force bool
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	removeCmd := &cobra.Command{
-		Use:   "remove <name>",
-		Short: translator.T("repo_remove_short", nil),
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			name := strings.TrimSpace(args[0])
+	err := cmd.Run()
+	output := strings.TrimSpace(stdout.String())
+	errorOutput := strings.TrimSpace(stderr.String())
 
-			if err := requireRoot(translator.T("repo_remove_privilege_action", map[string]any{
-				"Repository": name,
-			})); err != nil {
-				return err
-			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_remove_checking", map[string]any{
-				"Repository": name,
-			}))
-
-			if err := manager.Remove(name, force); err != nil {
-				var inUseErr *repo.RepositoryInUseError
-				if errors.As(err, &inUseErr) {
-					renderRepositoryInUseError(cmd, translator, inUseErr, commandName)
-					return err
-				}
-
-				return err
-			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_remove_success", map[string]any{
-				"Repository": name,
-			}))
-
-			return nil
-		},
-	}
-
-	removeCmd.Flags().BoolVar(&force, "force", false, translator.T("repo_remove_force_help", nil))
-
-	return removeCmd
-}
-
-func renderRepositoryInUseError(
-	cmd *cobra.Command,
-	translator *i18n.Translator,
-	err *repo.RepositoryInUseError,
-	commandName string,
-) {
-	fmt.Fprintln(cmd.ErrOrStderr(), translator.T("repo_remove_blocked", map[string]any{
-		"Repository": err.Repository,
-	}))
-
-	limit := 12
-	for index, installedPackage := range err.Packages {
-		if index >= limit {
-			break
+	if err != nil {
+		if errorOutput != "" {
+			return output, fmt.Errorf("%s %s failed: %w\n%s", name, strings.Join(args, " "), err, errorOutput)
 		}
 
-		fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", installedPackage.Atom)
+		return output, fmt.Errorf("%s %s failed: %w", name, strings.Join(args, " "), err)
 	}
 
-	if len(err.Packages) > limit {
-		fmt.Fprintln(cmd.ErrOrStderr(), translator.T("repo_remove_blocked_more", map[string]any{
-			"Count": len(err.Packages) - limit,
-		}))
-	}
-
-	fmt.Fprintln(cmd.ErrOrStderr())
-	fmt.Fprintln(cmd.ErrOrStderr(), translator.T("repo_remove_force_hint", map[string]any{
-		"Command": commandName,
-	}))
+	return output, nil
 }

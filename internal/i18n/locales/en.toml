@@ -265,12 +265,21 @@ other = "Repository {{.Repository}} disabled."
 [repo_remove_force_help]
 other = "Disable the repository even if installed packages came from it"
 
+[repo_remove_protected]
+other = "Repository {{.Repository}} is protected and cannot be disabled by Portico."
+
 [repo_remove_blocked]
 other = "Repository {{.Repository}} has installed packages and will not be disabled automatically:"
 
 [repo_remove_blocked_more]
 other = "  ...and {{.Count}} more"
 
+[repo_remove_reinstall_hint]
+other = "Reinstall or rebuild these packages from another repository before removing this one."
+
 [repo_remove_force_hint]
 other = "Use `sudo portico {{.Command}} remove <name> --force` only if you understand the consequences."
+
+[repo_remove_forced_warning]
+other = "Warning: repository {{.Repository}} was disabled even though {{.Count}} installed package(s) came from it:"
 
