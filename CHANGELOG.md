@@ -4,6 +4,57 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.4.3] - 2026-09-10
+
+### Fixed
+
+- Fixed dependency USE changes not being persisted before installation.
+  - Dependency USE changes discovered during sandbox dependency resolution are now retained.
+  - Dependency USE changes applied to the temporary Portage sandbox are now included in the final real Portage configuration write.
+  - Real installs now use the same effective USE configuration that produced the successful `emerge --pretend` transaction.
+  - Previously resolved dependency USE requirements should no longer reappear during the real `emerge`.
+
+- Fixed dependency USE changes discovered during early availability checks being lost.
+  - USE requirements found before the user-facing USE picker are now carried forward into the final resolved transaction state.
+  - Later dependency-resolution passes merge with earlier discovered USE requirements instead of replacing them.
+
+- Fixed dependency USE persistence for rebuild flows.
+  - `portico rebuild` now carries sandbox-resolved dependency USE changes into the final real `package.use` write before running `emerge --oneshot`.
+
+- Fixed duplicate dependency USE entries in the resolved transaction summary.
+  - Repeated requirements discovered across multiple dependency-resolution passes are now deduplicated before rendering and before writing real configuration.
+
+### Changed
+
+- Improved transaction resolution state tracking.
+  - Portico now tracks user-selected top-level USE flags and Portage-required dependency USE changes as separate parts of the resolved configuration.
+  - The final configuration write now includes both categories before running the real package operation.
+
+- Improved dependency USE rendering.
+  - The transaction plan now reflects dependency USE changes that Portico actually intends to persist.
+  - The displayed sandbox dependency USE changes are deduplicated for readability.
+
+### Internal
+
+- Added shared dependency USE deduplication helpers.
+  - Dependency USE changes are keyed by atom plus normalized flag list.
+  - Empty atoms and empty flag lists are ignored.
+  - Duplicate dependency USE requirements are skipped.
+
+- Updated install and rebuild resolver flows to carry existing dependency USE changes into later dependency-resolution passes.
+
+- Updated final config application so dependency USE changes are written through the same package-scoped `package.use` path as user-selected flags.
+
+### Known issues
+
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Repository and overlay management still need full real implementation.
+- Package config writing still needs safer merge/replace/diff behavior.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- The keyword traversal issue still needs real-world testing across requested atoms, direct dependencies, deep dependencies, and mixed keyword/license transactions.
+
 ## [0.4.2] - 2026-09-10
 
 ### Fixed
