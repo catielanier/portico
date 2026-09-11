@@ -4,6 +4,148 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.5.0] - 2026-09-11
+
+### Added
+
+- Added real repository and overlay management commands.
+  - `portico repo list`
+  - `sudo portico repo add <name>`
+  - `sudo portico repo sync`
+  - `sudo portico repo sync <name>`
+  - `sudo portico repo sync --preflight`
+  - `sudo portico repo sync <name> --preflight`
+  - `sudo portico repo remove <name>`
+  - `sudo portico repo remove <name> --force`
+  - `portico overlay ...` aliases for the same workflows.
+
+- Added idempotent repository add behavior.
+  - If a repository is not enabled, Portico enables it and syncs it.
+  - If a repository is already enabled, Portico leaves it enabled and syncs it.
+  - After enabling a repository, Portico verifies that Gentoo reports it as enabled before syncing.
+
+- Added explicit repository sync modes.
+  - `sudo portico repo sync` force-syncs all currently enabled repositories.
+  - `sudo portico repo sync <name>` force-syncs one currently enabled repository.
+  - `sudo portico repo sync --preflight` syncs only enabled repositories that are never-synced or stale.
+  - `sudo portico repo sync <name> --preflight` syncs one repository only if it is never-synced or stale.
+  - `-p` is supported as shorthand for `--preflight`.
+
+- Added repository sync freshness tracking.
+  - Portico records sync timestamps under `/var/cache/portico/repo-sync`.
+  - Sync stamps are freshness metadata only.
+  - Sync stamps do not define whether a repository exists or is enabled.
+
+- Added safe repository removal behavior.
+  - Portico refuses to disable the protected `gentoo` repository.
+  - Before disabling a repository, Portico checks installed package metadata under `/var/db/pkg`.
+  - If installed packages came from the repository, removal is blocked unless `--force` is used.
+  - Forced removal prints a warning listing affected installed packages.
+  - After disabling a repository, Portico verifies that it no longer appears in the enabled repository list.
+  - Portico removes its own sync stamp after successful repository removal.
+
+- Added routed help support.
+  - `portico --help`
+  - `portico --help find`
+  - `portico --help query`
+  - `portico --help install`
+  - `portico --help rebuild`
+  - `portico --help update`
+  - `portico --help repo`
+  - `portico --help repo sync`
+  - `portico --help overlay remove`
+
+- Added full help documentation keys for all current commands.
+  - Root command help.
+  - Package search and query help.
+  - Install, rebuild, and update help.
+  - Repository and overlay help.
+  - Repository subcommand help for `list`, `add`, `sync`, and `remove`.
+
+- Added version output.
+  - `portico --version`
+  - `portico -v`
+  - Development builds default to `unstable`.
+  - Release and Portage builds can inject the real version at build time.
+
+### Changed
+
+- Repository state is now based on Gentoo’s enabled repository state.
+  - Portico treats `eselect repository list -i` as the source of truth.
+  - Directories under `/var/db/repos` are treated as supporting filesystem state only.
+  - Portico cache files are treated as Portico metadata only.
+
+- Explicit repository sync and preflight sync now have separate meanings.
+  - Explicit sync means “sync now.”
+  - Preflight sync means “sync only if needed.”
+
+- `repo` and `overlay` are now aliases for the same repository-management behavior.
+  - `portico repo ...` and `portico overlay ...` use the same manager logic.
+  - Help text is specialized so users can use either vocabulary comfortably.
+
+- Help text is now centralized through i18n resources.
+  - Command `Short`, `Long`, and `Example` fields are applied from translation keys.
+  - This avoids scattering command documentation across individual CLI implementation files.
+
+### Fixed
+
+- Fixed removed or stale overlays being treated as sync candidates.
+  - Portico no longer syncs repositories merely because a directory exists under `/var/db/repos`.
+  - Portico no longer syncs repositories merely because a Portico sync stamp exists.
+  - Repositories removed outside Portico do not reappear as active sync targets unless Gentoo reports them as enabled.
+
+- Fixed `repo add` behavior for already-enabled repositories.
+  - Re-running `sudo portico repo add <name>` no longer relies on `eselect` handling that case gracefully.
+  - Portico checks enabled state first and syncs the repository either way.
+
+- Fixed overly broad version flag handling.
+  - `--version` and `-v` are only treated as version requests when used as the sole argument.
+  - This keeps room for command-specific flags later.
+
+### Internal
+
+- Added repository manager support for:
+  - listing enabled repositories;
+  - checking whether a repository is enabled;
+  - enabling and syncing repositories;
+  - force-syncing one repository;
+  - force-syncing all enabled repositories;
+  - preflight-syncing one repository;
+  - preflight-syncing all enabled repositories;
+  - disabling repositories safely;
+  - detecting installed packages from repository metadata;
+  - deleting Portico sync stamps after removal.
+
+- Added structured repository sync decisions.
+  - `manual`
+  - `never-synced`
+  - `stale`
+  - `not-needed`
+
+- Added structured repository removal results.
+  - Repository name.
+  - Whether removal was forced.
+  - Installed packages that came from the removed repository.
+
+- Added protected repository errors.
+- Added repository-in-use errors.
+- Added centralized command help application for the Cobra command tree.
+- Added routed help lookup for nested command paths.
+- Added i18n help keys for every current Portico command.
+
+### Known issues
+
+- Repository removal does not migrate installed packages to another repository.
+- Repository removal does not run `depclean`.
+- Repository removal does not delete repository files from `/var/db/repos`.
+- Repository removal does not remove package configuration entries.
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Transaction preflight sync still needs to be wired through the new repository manager path everywhere install/rebuild/update require it.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- Unit tests still need to be added for repository list parsing, sync decisions, protected removal, in-use removal blocking, and routed help.
+
 ## [0.4.4] - 2026-09-11
 
 ### Fixed
