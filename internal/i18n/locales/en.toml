@@ -177,3 +177,60 @@ other = "become your BIOS therapist"
 
 [joke.overlay_goblins]
 other = "pretend overlays are not where the goblins keep their furniture"
+
+[repo_list_short]
+other = "List enabled Portage repositories"
+
+[repo_list_heading]
+other = "Enabled repositories:"
+
+[repo_list_empty]
+other = "No enabled repositories found."
+
+[repo_add_short]
+other = "Enable and sync a Portage repository"
+
+[repo_add_privilege_action]
+other = "enable repository {{.Repository}}"
+
+[repo_add_enabling]
+other = "Ensuring repository {{.Repository}} is enabled and synced..."
+
+[repo_add_success]
+other = "Repository {{.Repository}} is enabled and synced."
+
+[repo_sync_short]
+other = "Sync an enabled Portage repository"
+
+[repo_sync_privilege_action]
+other = "sync repository {{.Repository}}"
+
+[repo_sync_start]
+other = "Syncing repository {{.Repository}}..."
+
+[repo_sync_success]
+other = "Repository {{.Repository}} synced."
+
+[repo_remove_short]
+other = "Disable a Portage repository"
+
+[repo_remove_privilege_action]
+other = "disable repository {{.Repository}}"
+
+[repo_remove_checking]
+other = "Checking repository {{.Repository}} before removal..."
+
+[repo_remove_success]
+other = "Repository {{.Repository}} disabled."
+
+[repo_remove_force_help]
+other = "Disable the repository even if installed packages came from it"
+
+[repo_remove_blocked]
+other = "Repository {{.Repository}} has installed packages and will not be disabled automatically:"
+
+[repo_remove_blocked_more]
+other = "  ...and {{.Count}} more"
+
+[repo_remove_force_hint]
+other = "Use `sudo portico {{.Command}} remove <name> --force` only if you understand the consequences."
