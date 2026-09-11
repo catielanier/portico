@@ -1,21 +1,21 @@
-// internal/ui/usepicker.go
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 package ui
 
 import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/catielanier/portico/internal/useflags"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 const (
+	defaultTerminalWidth   = 80
 	defaultTerminalHeight  = 24
 	minFlagsPerPage       = 1
-	usePickerReservedRows = 14
+	usePickerReservedRows = 18
+	descriptionMaxRows    = 4
 )
 
 type usePickerAction int
@@ -49,6 +49,7 @@ func NewUsePickerModel(atom string, selections []useflags.FlagSelection) UsePick
 		Selections:    selections,
 		Cursor:        0,
 		Page:          0,
+		Width:         defaultTerminalWidth,
 		Height:        defaultTerminalHeight,
 		FocusedAction: usePickerActionConfirm,
 	}
@@ -176,6 +177,9 @@ func (m UsePickerModel) View() string {
 	}
 
 	b.WriteString("\n")
+	b.WriteString(m.renderHighlightedDescription())
+	b.WriteString("\n")
+
 	b.WriteString("↑/↓ or k/j Navigate   Space Toggle\n")
 	b.WriteString("←/→ or h/l Move buttons   Enter Select\n\n")
 	b.WriteString(m.renderButtons())
@@ -429,6 +433,58 @@ func renderUsePickerButton(label string, focused bool) string {
 	return "  " + label + "  "
 }
 
+func (m UsePickerModel) renderHighlightedDescription() string {
+	if len(m.Selections) == 0 {
+		return ""
+	}
+
+	if m.Cursor < 0 || m.Cursor >= len(m.Selections) {
+		return ""
+	}
+
+	description := strings.TrimSpace(m.Selections[m.Cursor].Description)
+	if description == "" {
+		description = "No description available."
+	}
+
+	width := m.descriptionWidth()
+	lines := wrapText(description, width)
+
+	if len(lines) > descriptionMaxRows {
+		lines = append(lines[:descriptionMaxRows-1], "…")
+	}
+
+	var b strings.Builder
+
+	b.WriteString("Description:\n")
+
+	for _, line := range lines {
+		b.WriteString("  ")
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	for i := len(lines); i < descriptionMaxRows; i++ {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func (m UsePickerModel) descriptionWidth() int {
+	width := m.Width
+	if width <= 0 {
+		width = defaultTerminalWidth
+	}
+
+	width -= 2
+	if width < 20 {
+		return 20
+	}
+
+	return width
+}
+
 func (m UsePickerModel) visibleRange() (int, int) {
 	if len(m.Selections) == 0 {
 		return 0, 0
@@ -536,6 +592,50 @@ func (m UsePickerModel) hasInstalledColumn() bool {
 	}
 
 	return false
+}
+
+func wrapText(value string, width int) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	if width <= 0 {
+		width = defaultTerminalWidth
+	}
+
+	words := strings.Fields(value)
+	if len(words) == 0 {
+		return nil
+	}
+
+	lines := make([]string, 0)
+	current := ""
+
+	for _, word := range words {
+		if current == "" {
+			current = word
+			continue
+		}
+
+		if runeLen(current)+1+runeLen(word) <= width {
+			current += " " + word
+			continue
+		}
+
+		lines = append(lines, current)
+		current = word
+	}
+
+	if current != "" {
+		lines = append(lines, current)
+	}
+
+	return lines
+}
+
+func runeLen(value string) int {
+	return utf8.RuneCountInString(value)
 }
 
 func RunUsePicker(atom string, selections []useflags.FlagSelection) ([]useflags.FlagSelection, bool, error) {
