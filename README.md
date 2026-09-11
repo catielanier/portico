@@ -4,6 +4,8 @@ A clearer CLI/TUI entrance to Gentoo Portage for choosing package features and s
 
 Portico does not replace Portage. It wraps common package workflows with a reviewable plan, scoped config writes, and a friendlier USE flag flow.
 
+It is meant to make common Portage tasks easier to understand without hiding what Gentoo is actually doing.
+
 ## What Portico does
 
 Portico helps with:
@@ -17,10 +19,13 @@ Portico helps with:
 
 Portico favors package-specific configuration and explicit confirmation before making system changes.
 
+Where possible, Portico first tests changes in a temporary Portage configuration sandbox, previews the resulting transaction, and only writes real configuration after confirmation.
+
 ## What Portico will not do
 
 Portico will not:
 
+- replace Portage
 - replace the Gentoo Handbook
 - hide Portage warnings
 - silently modify global USE flags
@@ -30,9 +35,47 @@ Portico will not:
 - run package mutations without root privileges
 - treat donated mirrors like a stress toy
 
+Portico should make Gentoo package management easier to follow, not less transparent.
+
 ## Commands
 
-### Search for packages
+Portico supports routed help for every command:
+
+```sh
+portico --help
+portico --help find
+portico --help query
+portico --help install
+portico --help rebuild
+portico --help update
+portico --help repo
+portico --help repo sync
+portico --help overlay remove
+```
+
+Standard Cobra-style help also works:
+
+```sh
+portico install --help
+portico repo sync --help
+```
+
+Check the current Portico version:
+
+```sh
+portico --version
+portico -v
+```
+
+Development builds report:
+
+```text
+unstable
+```
+
+Release and Portage builds can inject the actual version at build time.
+
+## Search for packages
 
 ```sh
 portico find <query>
@@ -46,7 +89,11 @@ Example:
 portico find irssi
 ```
 
-### Inspect a package
+`find` is read-only and does not require root privileges.
+
+Portico may improve how results are displayed or ranked, but package names, descriptions, versions, and repository information come from the Gentoo system.
+
+## Inspect a package
 
 ```sh
 portico query <atom>
@@ -60,7 +107,11 @@ Example:
 portico query net-irc/irssi
 ```
 
-### Install packages
+`query` is read-only and does not require root privileges.
+
+USE flag names and descriptions are provided by Gentoo tooling and are displayed as system-provided package metadata.
+
+## Install packages
 
 ```sh
 sudo portico install <atom...>
@@ -72,6 +123,18 @@ Example:
 
 ```sh
 sudo portico install net-irc/irssi app-misc/tmux
+```
+
+Portico also supports package version shorthand:
+
+```text
+atom@version
+```
+
+Example:
+
+```sh
+sudo portico install app-editors/emacs@30.1
 ```
 
 Portico will:
@@ -92,7 +155,9 @@ Portico will not:
 - globally accept licenses
 - silently run `emerge --ask`
 
-### Rebuild packages
+Portico’s own confirmation is the confirmation step.
+
+## Rebuild packages
 
 ```sh
 sudo portico rebuild <atom...>
@@ -105,6 +170,8 @@ Example:
 ```sh
 sudo portico rebuild net-irc/irssi
 ```
+
+Use `rebuild` when a package is already installed but you want to rebuild it with different package-specific configuration.
 
 Portico will:
 
@@ -121,7 +188,7 @@ Portico will not:
 - run `depclean`
 - globally change USE flags
 
-### Update packages
+## Update packages
 
 ```sh
 sudo portico update
@@ -135,14 +202,29 @@ sudo portico update <atom...>
 
 Updates one or more specific packages.
 
+Examples:
+
+```sh
+sudo portico update
+sudo portico update net-irc/irssi
+sudo portico update net-irc/irssi app-misc/tmux
+```
+
+With no package arguments, Portico updates `@world`.
+
+With package arguments, Portico updates only the selected packages.
+
 Portico previews the transaction before running the update.
 
-### Manage repositories
+Current limitation: update can handle some package-specific license requirements, but update-time USE autounmask changes are not fully supported yet.
+
+## Manage repositories
 
 ```sh
 portico repo list
 sudo portico repo add <name>
 sudo portico repo remove <name>
+sudo portico repo sync
 sudo portico repo sync <name>
 ```
 
@@ -152,10 +234,166 @@ sudo portico repo sync <name>
 portico overlay list
 sudo portico overlay add <name>
 sudo portico overlay remove <name>
+sudo portico overlay sync
 sudo portico overlay sync <name>
 ```
 
 Portico uses `repo` as the canonical command and `overlay` because Gentoo users say overlay.
+
+Both command groups use the same repository-management behavior.
+
+### Repository source of truth
+
+Portico treats Gentoo’s enabled repository state as authoritative.
+
+Enabled repositories are read from:
+
+```sh
+eselect repository list -i
+```
+
+Portico does not treat directories under `/var/db/repos` as proof that a repository is enabled.
+
+Portico does not treat files under `/var/cache/portico` as proof that a repository is enabled.
+
+Those locations are supporting filesystem/cache state only.
+
+### List repositories
+
+```sh
+portico repo list
+portico overlay list
+```
+
+Lists repositories currently enabled through Gentoo repository tooling.
+
+### Add a repository
+
+```sh
+sudo portico repo add <name>
+sudo portico overlay add <name>
+```
+
+Example:
+
+```sh
+sudo portico repo add guru
+```
+
+Add behavior is idempotent:
+
+- if the repository is not enabled, Portico enables it and syncs it
+- if the repository is already enabled, Portico leaves it enabled and syncs it
+- after enabling, Portico verifies that Gentoo reports the repository as enabled before syncing
+
+Under the hood, Portico uses Gentoo tooling such as:
+
+```text
+eselect repository enable <name>
+emaint sync -r <name>
+```
+
+### Sync repositories
+
+Force-sync all enabled repositories:
+
+```sh
+sudo portico repo sync
+sudo portico overlay sync
+```
+
+Force-sync one enabled repository:
+
+```sh
+sudo portico repo sync guru
+sudo portico overlay sync guru
+```
+
+Explicit sync means:
+
+```text
+sync now
+```
+
+### Preflight sync
+
+Preflight sync is the mirror-friendly mode.
+
+It syncs only repositories that Portico has never synced or that are stale according to Portico’s sync stamp metadata.
+
+Preflight sync all enabled repositories:
+
+```sh
+sudo portico repo sync --preflight
+sudo portico repo sync -p
+sudo portico overlay sync --preflight
+sudo portico overlay sync -p
+```
+
+Preflight sync one repository:
+
+```sh
+sudo portico repo sync guru --preflight
+sudo portico repo sync guru -p
+sudo portico overlay sync guru --preflight
+sudo portico overlay sync guru -p
+```
+
+Preflight sync means:
+
+```text
+sync only if needed
+```
+
+By default, Portico treats repositories as stale after 24 hours.
+
+Sync stamps are stored under:
+
+```text
+/var/cache/portico/repo-sync
+```
+
+Sync stamps are freshness metadata only. They do not define whether a repository exists or is enabled.
+
+### Remove a repository
+
+```sh
+sudo portico repo remove <name>
+sudo portico overlay remove <name>
+```
+
+Example:
+
+```sh
+sudo portico repo remove guru
+```
+
+Portico removal behavior:
+
+- refuses to remove the protected `gentoo` repository
+- checks installed package metadata under `/var/db/pkg`
+- blocks removal if installed packages came from that repository
+- allows forced removal with `--force`
+- warns when forced removal affects installed packages
+- verifies the repository no longer appears enabled after disabling
+- removes Portico’s own sync stamp after successful removal
+
+Forced removal:
+
+```sh
+sudo portico repo remove guru --force
+sudo portico overlay remove guru --force
+```
+
+Portico does not:
+
+- delete repository files from `/var/db/repos`
+- delete package configuration
+- run `depclean`
+- migrate installed packages
+- reinstall packages from another repository
+
+If installed packages came from a repository, rebuild or reinstall them from another repository before removing it.
 
 ## Safety model
 
@@ -183,30 +421,53 @@ When Portage requires dependency USE changes, Portico writes scoped `package.use
 
 Unsupported mask types stop the transaction instead of being guessed around.
 
+The core safety rule is:
+
+```text
+If Portico needed a configuration change to make the sandbox transaction valid,
+that same confirmed configuration must exist before the real transaction runs.
+```
+
 ## Repository syncing
 
-Portico avoids unnecessary repository syncing.
+Portico avoids unnecessary repository syncing during normal package workflows.
 
 Read-only commands such as `find` and `query` do not normally sync repositories. If Portico detects an enabled repository that has never been synced, it warns and asks whether to sync it.
 
 Mutation commands such as `install`, `rebuild`, and `update` sync when needed.
 
+Manual sync commands are explicit:
+
+```sh
+sudo portico repo sync
+```
+
+means sync all enabled repositories now.
+
+```sh
+sudo portico repo sync --preflight
+```
+
+means sync only enabled repositories that are stale or never synced by Portico.
+
 ## Requirements
 
 Portico expects a Gentoo system with Portage available.
 
-Recommended tools:
-
-```sh
-emerge app-portage/gentoolkit
-```
-
-Portico uses Gentoo tools such as:
+Required Gentoo tools:
 
 - `emerge`
 - `equery`
 - `emaint`
 - `eselect repository`
+
+`equery` is provided by `app-portage/gentoolkit`:
+
+```sh
+sudo emerge app-portage/gentoolkit
+```
+
+Repository management requires Gentoo repository tooling to be configured on the system.
 
 ## Development
 
@@ -216,10 +477,37 @@ Build:
 go build -o portico ./cmd/portico
 ```
 
+Build with an injected version:
+
+```sh
+go build \
+  -ldflags "-X github.com/catielanier/portico/internal/cli.version=0.5.0" \
+  -o portico \
+  ./cmd/portico
+```
+
 Run:
 
 ```sh
 go run ./cmd/portico --help
+```
+
+Run a command from source:
+
+```sh
+go run ./cmd/portico find irssi
+```
+
+Check development version:
+
+```sh
+go run ./cmd/portico --version
+```
+
+Expected development output:
+
+```text
+unstable
 ```
 
 Test:
