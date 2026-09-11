@@ -4,6 +4,57 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.4.4] - 2026-09-11
+
+### Fixed
+
+- Fixed USE flag descriptions no longer appearing for the highlighted flag.
+  - The USE picker now shows the currently highlighted flag’s description again.
+  - Descriptions update immediately when moving between flags.
+  - Long descriptions wrap to the available terminal width.
+  - Description rendering works with paginated USE flag lists.
+  - Description rendering remains valid after terminal resizing.
+  - Flags without descriptions are handled with a neutral fallback.
+
+### Changed
+
+- Began migrating Portico-owned user-facing UI strings into the i18n layer.
+  - USE picker titles, page labels, table headers, help text, button labels, and description labels now use translation keys.
+  - Install progress messages now use translation keys.
+  - Shared button labels such as `Confirm`, `Cancel`, `Next`, and `Prev` now use translation keys.
+  - Missing translations continue to fall back safely through the existing i18n behavior.
+
+- Added default i18n helper plumbing.
+  - Added a default English translator helper for UI components that do not yet receive a translator explicitly.
+  - UI components can now request translated strings without hardcoding new display copy directly.
+
+- Improved install progress i18n coverage.
+  - The compilation-time notice now uses an i18n key.
+  - Progress percentage, completed package count, package count, cancel hint, and preparing state now use i18n keys.
+
+- Updated joke wording.
+  - The Arch joke now says `btw I use Arch` instead of `Actually, I use Arch`.
+
+### Internal
+
+- Added i18n keys for USE picker UI copy.
+- Added i18n keys for install progress UI copy.
+- Added common i18n keys for shared button labels.
+- Added `i18n.MustDefault()` as a safe default-English translator helper.
+- Updated USE picker rendering to reserve bounded description space while preserving pagination.
+- Added text wrapping support for highlighted USE flag descriptions.
+
+### Known issues
+
+- This release starts the i18n migration but does not yet move every Portico-owned CLI string into translation resources.
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Repository and overlay management still need full real implementation.
+- Package config writing still needs safer merge/replace/diff behavior.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- The keyword traversal issue still needs real-world testing across requested atoms, direct dependencies, deep dependencies, and mixed keyword/license transactions.
+
 ## [0.4.3] - 2026-09-10
 
 ### Fixed
