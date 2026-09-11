@@ -4,6 +4,34 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.5.3] - 2026-09-11
+
+### Fixed
+
+- Fixed architecture keyword handling for masked package resolution.
+  - Portico no longer only recognizes keyword masks that start with `~`.
+  - Stable architecture keywords such as `arm64`, `riscv`, `ppc64`, and `x86` can now be extracted from Portage mask output.
+  - Testing architecture keywords such as `~amd64`, `~arm64`, `~riscv`, and `~x86` continue to be preserved exactly.
+  - Missing keyword masks remain unsupported instead of being guessed around.
+
+- Fixed masked package keyword parsing being implicitly amd64-shaped.
+  - Portico now treats required keyword tokens as opaque Portage-provided values.
+  - Portico preserves the exact keyword token reported by Portage when writing package-specific `package.accept_keywords` entries.
+
+### Internal
+
+- Added regression tests for non-amd64 keyword handling.
+  - Autounmask keyword parsing now has coverage for `~arm64`, `riscv`, `ppc64`, and `~x86`.
+  - Masked package parsing now has coverage for both testing and stable non-amd64 keyword masks.
+  - Accept-keyword writing now has coverage to ensure keyword tokens are written exactly as provided.
+
+### Known issues
+
+- Cross-architecture behavior still depends on Portage output shape and needs broader real-system testing.
+- `uninstall` does not remove Portico-managed package configuration entries for removed atoms.
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Transaction parsing still needs hardening for more Portage output shapes.
+
 ## [0.5.2] - 2026-09-11
 
 ### Added
