@@ -67,6 +67,9 @@ other = """  portico find vlc
 
   sudo portico install media-video/vlc
   sudo portico install media-video/vlc app-editors/emacs
+  sudo portico install app-editors/emacs@30.1
+  sudo portico install mail-client/mailspring-bin::guru
+  sudo portico install mail-client/mailspring-bin@1.23.0::guru
   sudo portico rebuild media-video/vlc
   sudo portico update
   sudo portico update media-video/vlc
@@ -128,10 +131,36 @@ other = "Install Portage packages"
 [install_long]
 other = """Install one or more Portage packages.
 
-Portico creates a temporary Portage configuration sandbox, resolves package-scoped
-configuration changes there first, previews the calculated transaction, asks for
-confirmation, then writes approved package-scoped configuration before running
-the real emerge transaction.
+Supported install target forms:
+
+  atom
+  atom@version
+  atom::repository
+  atom@version::repository
+
+Examples:
+
+  media-video/vlc
+  app-editors/emacs@30.1
+  mail-client/mailspring-bin::guru
+  mail-client/mailspring-bin@1.23.0::guru
+
+The atom@version form is Portico shorthand. Portico translates it to a
+Portage-compatible version-pinned atom before running emerge.
+
+Repository-qualified targets use Gentoo's native ::repository syntax. When a
+repository is specified explicitly, Portico skips the package source picker for
+that atom.
+
+If an unqualified requested atom is available from multiple enabled repositories,
+Portico prompts you to choose a source before continuing. The source picker shows
+the repository name, latest available version from that repository, status, and
+the explicit install target that will be used.
+
+Portico creates a temporary Portage configuration sandbox, resolves
+package-scoped configuration changes there first, previews the calculated
+transaction, asks for confirmation, then writes approved package-scoped
+configuration before running the real emerge transaction.
 
 Portico may prompt for USE flags, testing keywords, licenses, and dependency
 configuration changes when Portage requires them.
@@ -143,7 +172,9 @@ Portico does not modify global USE flags in make.conf and does not run emerge
 other = """  sudo portico install media-video/vlc
   sudo portico install media-sound/ardour
   sudo portico install media-video/vlc app-editors/emacs
-  sudo portico install app-editors/emacs@30.1"""
+  sudo portico install app-editors/emacs@30.1
+  sudo portico install mail-client/mailspring-bin::guru
+  sudo portico install mail-client/mailspring-bin@1.23.0::guru"""
 
 [rebuild_short]
 other = "Rebuild installed Portage packages"
@@ -291,7 +322,37 @@ other = "Portage is waiting before removal begins."
 other = "Waiting for Portage countdown..."
 
 [cleanup_progress_waiting_hint]
-other = "Press Enter, Ctrl+C, Esc, q, or c to cancel before removal starts."
+other = "Press Ctrl+C, Esc, q, or c to cancel before removal starts."
+
+[cleanup_progress_cancelled]
+other = "Cleanup cancelled."
+
+[source_picker_found_multiple]
+other = "Multiple repositories provide {{.Atom}}. Choose a source before continuing."
+
+[source_picker_cancelled]
+other = "Source selection cancelled for {{.Atom}}."
+
+[source_picker_title]
+other = "Select package source — {{.Atom}}"
+
+[source_picker_empty]
+other = "No package sources found."
+
+[source_picker_header]
+other = "  Repository         Latest version    Status       Install target"
+
+[source_picker_scroll_position]
+other = "Candidate {{.Current}} of {{.Total}}"
+
+[source_picker_selected_target]
+other = "Selected target: {{.Target}}"
+
+[source_picker_selected_masked]
+other = "Mask: {{.Reason}}"
+
+[source_picker_help]
+other = "↑/↓ or k/j Navigate   PgUp/PgDn Page   Enter Select   Esc/q Cancel"
 
 [will_install_atom]
 other = "install {{.Atom}}"

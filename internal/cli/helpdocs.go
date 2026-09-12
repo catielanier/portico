@@ -29,35 +29,40 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 			LongKey:    "root_long",
 			ExampleKey: "root_example",
 		},
-
 		"portico find": {
 			ShortKey:   "find_short",
 			LongKey:    "find_long",
 			ExampleKey: "find_example",
 		},
-
 		"portico query": {
 			ShortKey:   "query_short",
 			LongKey:    "query_long",
 			ExampleKey: "query_example",
 		},
-
 		"portico install": {
 			ShortKey:   "install_short",
 			LongKey:    "install_long",
 			ExampleKey: "install_example",
 		},
-
 		"portico rebuild": {
 			ShortKey:   "rebuild_short",
 			LongKey:    "rebuild_long",
 			ExampleKey: "rebuild_example",
 		},
-
 		"portico update": {
 			ShortKey:   "update_short",
 			LongKey:    "update_long",
 			ExampleKey: "update_example",
+		},
+		"portico uninstall": {
+			ShortKey:   "uninstall_short",
+			LongKey:    "uninstall_long",
+			ExampleKey: "uninstall_example",
+		},
+		"portico clean": {
+			ShortKey:   "clean_short",
+			LongKey:    "clean_long",
+			ExampleKey: "clean_example",
 		},
 
 		"portico repo": {
@@ -68,7 +73,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "repo",
 			},
 		},
-
 		"portico repo list": {
 			ShortKey:   "repo_list_short",
 			LongKey:    "repo_list_long",
@@ -77,7 +81,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "repo",
 			},
 		},
-
 		"portico repo add": {
 			ShortKey:   "repo_add_short",
 			LongKey:    "repo_add_long",
@@ -86,7 +89,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "repo",
 			},
 		},
-
 		"portico repo sync": {
 			ShortKey:   "repo_sync_short",
 			LongKey:    "repo_sync_long",
@@ -95,7 +97,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "repo",
 			},
 		},
-
 		"portico repo remove": {
 			ShortKey:   "repo_remove_short",
 			LongKey:    "repo_remove_long",
@@ -113,7 +114,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "overlay",
 			},
 		},
-
 		"portico overlay list": {
 			ShortKey:   "overlay_list_short",
 			LongKey:    "repo_list_long",
@@ -122,7 +122,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "overlay",
 			},
 		},
-
 		"portico overlay add": {
 			ShortKey:   "overlay_add_short",
 			LongKey:    "repo_add_long",
@@ -131,7 +130,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "overlay",
 			},
 		},
-
 		"portico overlay sync": {
 			ShortKey:   "overlay_sync_short",
 			LongKey:    "repo_sync_long",
@@ -140,7 +138,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 				"Command": "overlay",
 			},
 		},
-
 		"portico overlay remove": {
 			ShortKey:   "overlay_remove_short",
 			LongKey:    "repo_remove_long",
@@ -148,17 +145,6 @@ func applyCommandHelp(root *cobra.Command, translator *i18n.Translator) {
 			Data: map[string]any{
 				"Command": "overlay",
 			},
-		},
-		"portico uninstall": {
-			ShortKey:   "uninstall_short",
-			LongKey:    "uninstall_long",
-			ExampleKey: "uninstall_example",
-		},
-
-		"portico clean": {
-			ShortKey:   "clean_short",
-			LongKey:    "clean_long",
-			ExampleKey: "clean_example",
 		},
 	}
 
@@ -184,7 +170,11 @@ func applyCommandHelpRecursive(
 	}
 }
 
-func applyCommandHelpSpec(command *cobra.Command, translator *i18n.Translator, spec commandHelpSpec) {
+func applyCommandHelpSpec(
+	command *cobra.Command,
+	translator *i18n.Translator,
+	spec commandHelpSpec,
+) {
 	data := spec.Data
 	if data == nil {
 		data = map[string]any{}

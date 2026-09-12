@@ -18,6 +18,7 @@ Portico helps with:
 - uninstalling packages
 - cleaning unused packages with depclean
 - managing repositories / overlays
+- choosing an install source when a package exists in more than one enabled repository
 
 Portico favors package-specific configuration and explicit confirmation before making system changes.
 
@@ -36,6 +37,7 @@ Portico will not:
 - overwrite user-managed Portage config without showing what it intends to do
 - run package mutations without root privileges
 - run depclean automatically after uninstalling unless you confirm it
+- silently choose between multiple enabled repositories when Portico detects that a package is available from more than one source
 - treat donated mirrors like a stress toy
 
 Portico should make Gentoo package management easier to follow, not less transparent.
@@ -119,18 +121,19 @@ USE flag names and descriptions are provided by Gentoo tooling and are displayed
 ## Install packages
 
 ```sh
-sudo portico install <atom...>
+sudo portico install <atom[@version][::repository]...>
 ```
 
 Configures selected USE flags, previews the Portage transaction, and installs the requested package or packages.
 
-Example:
+Examples:
 
 ```sh
+sudo portico install net-irc/irssi
 sudo portico install net-irc/irssi app-misc/tmux
 ```
 
-Portico also supports package version shorthand:
+Portico supports package version shorthand:
 
 ```text
 atom@version
@@ -142,10 +145,76 @@ Example:
 sudo portico install app-editors/emacs@30.1
 ```
 
+Portico translates that to a Portage-compatible version-pinned atom:
+
+```text
+=app-editors/emacs-30.1
+```
+
+Portico also supports explicit repository selection using Gentoo’s native repository qualifier syntax:
+
+```text
+atom::repository
+atom@version::repository
+```
+
+Examples:
+
+```sh
+sudo portico install mail-client/mailspring-bin::guru
+sudo portico install mail-client/mailspring-bin@1.23.0::guru
+```
+
+These resolve to Portage-compatible install targets:
+
+```text
+mail-client/mailspring-bin::guru
+=mail-client/mailspring-bin-1.23.0::guru
+```
+
+When a repository is specified explicitly, Portico skips the package source picker for that atom.
+
+### Package source picker
+
+If an unqualified requested atom is available from more than one enabled repository, Portico prompts you to choose the source before continuing.
+
+Portico discovers source candidates using:
+
+```sh
+emerge -pvO <atom>
+```
+
+The source picker shows:
+
+- repository / overlay name
+- latest available version from that repository
+- source status
+- explicit install target
+
+Example source picker shape:
+
+```text
+Select package source — mail-client/mailspring-bin
+
+  Repository         Latest version    Status       Install target
+> guru               1.23.0            masked       =mail-client/mailspring-bin-1.23.0::guru
+  edgets             1.23.0            masked       =mail-client/mailspring-bin-1.23.0::edgets
+
+Selected target: =mail-client/mailspring-bin-1.23.0::guru
+
+↑/↓ or k/j Navigate   PgUp/PgDn Page   Enter Select   Esc/q Cancel
+```
+
+If only one repository provides the requested atom, Portico continues normally.
+
+If multiple repositories provide the atom, Portico will not silently choose one.
+
 Portico will:
 
 - inspect USE flags for each requested package
 - let you choose package-specific USE flag changes
+- prompt for a package source when multiple enabled repositories provide an unqualified atom
+- respect explicit `::repository` targets
 - create a temporary Portage config sandbox
 - run `emerge --pretend --verbose`
 - resolve supported package-specific keyword, license, and dependency USE requirements
@@ -158,6 +227,7 @@ Portico will not:
 - modify `/etc/portage/make.conf`
 - globally enable testing keywords
 - globally accept licenses
+- silently pick between multiple enabled repositories when source selection is needed
 - silently run `emerge --ask`
 
 Portico’s own confirmation is the confirmation step.

@@ -15,7 +15,7 @@ import (
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install <atom[@version]...>",
+	Use:   "install <atom[@version][::repository]...>",
 	Short: "Configure USE flags and install one or more packages",
 	Args:  validateOneOrMorePackageTargetArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -29,6 +29,11 @@ var installCmd = &cobra.Command{
 		}
 
 		if err := syncRepositoriesForMutation(); err != nil {
+			return err
+		}
+
+		atoms, err = resolvePackageSourcesForInstall(cmd, i18n.MustDefault(), atoms)
+		if err != nil {
 			return err
 		}
 
@@ -605,7 +610,8 @@ func applyMaskedPackageReportInSandbox(
 	if candidate.HasReason(portage.MaskReasonTestingKeyword) {
 		keyword := candidate.RequiredKeyword
 		if keyword == "" {
-			keyword = "~amd64"
+			fmt.Println("Portico detected a keyword mask, but could not determine the required keyword token.")
+			return originalErr
 		}
 
 		if !maskActions.AcceptedKeywords[keyword] {
