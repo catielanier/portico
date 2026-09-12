@@ -4,6 +4,142 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## [0.5.4] - 2026-09-11
+
+### Added
+
+- Added package source selection for install targets available from multiple enabled repositories.
+  - Portico now checks whether an unqualified install atom is available from more than one repository or overlay.
+  - If multiple repositories provide the requested atom, Portico opens a source picker before continuing.
+  - The source picker shows:
+    - repository / overlay name
+    - latest available version from that repository
+    - source status
+    - explicit install target
+  - The picker is scrollable for packages with many source candidates.
+
+- Added package source discovery using `emerge -pvO <atom>`.
+  - Portico parses source candidates from Portage pretend output.
+  - Masked package candidates are included when Portage reports them.
+  - Candidate output is grouped by repository.
+  - Portico keeps the latest candidate per repository based on Portage’s output order.
+
+- Added explicit repository selection syntax for install arguments.
+  - Supports `atom::repository`.
+  - Supports `atom@version::repository`.
+  - Explicit repository targets skip the package source picker.
+  - `atom@version::repository` resolves to a Portage-compatible target like:
+
+    ```text
+    =category/package-version::repository
+    ```
+
+- Added source picker i18n strings.
+  - Multiple-source notice.
+  - Source selection title.
+  - Empty source message.
+  - Source picker header.
+  - Scroll position.
+  - Selected target display.
+  - Masked candidate display.
+  - Source picker help text.
+  - Source selection cancellation message.
+
+### Changed
+
+- Install command help now documents repository-qualified install targets.
+  - Usage now supports:
+
+    ```text
+    install <atom[@version][::repository]...>
+    ```
+
+  - Help examples now include:
+    - `sudo portico install mail-client/mailspring-bin::guru`
+    - `sudo portico install mail-client/mailspring-bin@1.23.0::guru`
+
+- README now documents package source selection.
+  - Added install target forms:
+    - `atom`
+    - `atom@version`
+    - `atom::repository`
+    - `atom@version::repository`
+  - Added package source picker behavior.
+  - Added example source picker output.
+  - Clarified that explicit `::repository` targets bypass the source picker.
+  - Clarified that Portico will not silently choose between multiple enabled repositories when source selection is needed.
+
+- Install flow now resolves package sources before USE flag inspection.
+  - Requested install atoms are parsed first.
+  - Repository sync runs before source discovery.
+  - Unqualified multi-source atoms are resolved through the picker.
+  - Selected source targets continue through the existing USE flag, sandbox, pretend, mask, keyword, license, confirmation, and install workflow.
+
+- Source candidate ordering now preserves Portage output order.
+  - Portico trusts `emerge -pvO` ordering for version priority.
+  - Only the first candidate per repository is kept.
+  - The `gentoo` repository may be nudged first when present, but overlays otherwise keep Portage’s reported order.
+
+### Fixed
+
+- Fixed package source discovery initially using the wrong discovery approach.
+  - Replaced the earlier `equery list -p <atom>` idea with `emerge -pvO <atom>`, which exposes the useful masked candidate shape needed for overlay/source selection.
+
+- Fixed source candidate tests expecting Portage output order while implementation sorted masked overlays alphabetically.
+  - Candidate grouping now preserves source order from Portage output.
+
+- Fixed non-constant format string usage in source selection cancellation.
+  - Replaced direct `fmt.Errorf(translator.T(...))` with a safe constant format string.
+
+- Fixed masked package keyword fallback behavior in install handling.
+  - Portico no longer falls back to `~amd64` when it cannot parse a required keyword.
+  - If a keyword mask is detected but the required keyword token cannot be determined, Portico stops instead of inventing an architecture-specific keyword.
+
+### Internal
+
+- Added package source discovery layer.
+  - New `PackageSourceCandidate` type.
+  - New `PackageSourceReport` type.
+  - New `FindPackageSourceCandidates()` function.
+  - New `ParsePackageSourceReport()` parser.
+  - New `NeedsPackageSourceSelection()` helper.
+
+- Added source picker UI.
+  - New scrollable Bubble Tea picker for package source candidates.
+  - Supports keyboard navigation:
+    - `↑` / `↓`
+    - `k` / `j`
+    - `PgUp` / `PgDn`
+    - `Home` / `End`
+    - `Enter`
+    - `Esc` / `q`
+
+- Added CLI source-resolution helper.
+  - Resolves install atoms before the existing install workflow.
+  - Bypasses source selection when an atom already contains an explicit `::repository` qualifier.
+  - Replaces ambiguous atoms with explicit selected install targets.
+
+- Added parser tests for source discovery.
+  - Covered masked package output from `emerge -pvO`.
+  - Covered latest-per-repository behavior.
+  - Covered multi-repository source selection detection.
+  - Covered single-repository no-picker behavior.
+
+### Known issues
+
+- Source picker currently applies to `install`; `query`, `rebuild`, and `update <atom>` do not yet use source selection.
+- Source discovery depends on Portage output shape from `emerge -pvO`.
+- Version ordering trusts Portage output instead of implementing Gentoo version comparison internally.
+- Source picker displays basic status only; masked/keyword/license details can be improved.
+- Explicit repository syntax still depends on install target parsing accepting `::repository` correctly.
+- USE flag inspection may need additional normalization if `equery` does not accept fully explicit `=category/package-version::repository` targets in all cases.
+- `uninstall` does not remove Portico-managed package configuration entries for removed atoms.
+- Safe config upsert/merge is still needed so Portico does not append duplicate or conflicting entries to its own `90-portico` files.
+- Transaction parsing still needs hardening for more Portage output shapes.
+- Update flow can apply license changes, but still does not apply update-time USE autounmask changes.
+- USE flag picker does not yet support search/filtering.
+- Unit tests still need to be added for full source picker UI behavior and explicit `atom@version::repository` argument normalization.
+
 ## [0.5.3] - 2026-09-11
 
 ### Fixed
