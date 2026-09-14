@@ -3,6 +3,7 @@
 /bin/
 /dist/
 /build/
+/go-mod/
 *.exe
 *.exe~
 *.dll
