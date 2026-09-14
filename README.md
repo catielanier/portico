@@ -6,6 +6,16 @@ Portico does not replace Portage. It wraps common package workflows with a revie
 
 It is meant to make common Portage tasks easier to understand without hiding what Gentoo is actually doing.
 
+## Screenshots
+
+<p align="center">
+  <img src="img/Portico-1.png" alt="Portico package workflow" width="900">
+</p>
+
+<p align="center">
+  <img src="img/Portico-2.png" alt="Portico package workflow and transaction preview" width="900">
+</p>
+
 ## What Portico does
 
 Portico helps with:
@@ -151,7 +161,7 @@ Portico translates that to a Portage-compatible version-pinned atom:
 =app-editors/emacs-30.1
 ```
 
-Portico also supports explicit repository selection using Gentoo’s native repository qualifier syntax:
+Portico also supports explicit repository selection using Gentoo's native repository qualifier syntax:
 
 ```text
 atom::repository
@@ -228,9 +238,9 @@ Portico will not:
 - globally enable testing keywords
 - globally accept licenses
 - silently pick between multiple enabled repositories when source selection is needed
-- silently run `emerge --ask`
+- rely on `emerge --ask` for confirmation
 
-Portico’s own confirmation is the confirmation step.
+Portico's own confirmation is the confirmation step.
 
 ## Rebuild packages
 
@@ -318,7 +328,7 @@ Portico will:
 - preview `emerge --unmerge <atom...>`
 - ask before uninstalling the requested package or packages
 - run `emerge --unmerge <atom...>` with a progress UI
-- surface Portage’s pre-removal countdown/waiting state
+- surface Portage's pre-removal countdown/waiting state
 - allow cancellation before and during the removal workflow
 - ask whether to start the clean workflow afterward
 
@@ -349,7 +359,7 @@ Portico will:
 - preview `emerge --depclean`
 - ask before running the real depclean
 - run `emerge --depclean` with a progress UI
-- surface Portage’s pre-removal countdown/waiting state
+- surface Portage's pre-removal countdown/waiting state
 - allow cancellation before and during the cleanup workflow
 
 `clean` does not take package arguments. It is a Portico-managed wrapper around Portage depclean behavior.
@@ -380,7 +390,7 @@ Both command groups use the same repository-management behavior.
 
 ### Repository source of truth
 
-Portico treats Gentoo’s enabled repository state as authoritative.
+Portico treats Gentoo's enabled repository state as authoritative.
 
 Enabled repositories are read from:
 
@@ -455,7 +465,7 @@ sync now
 
 Preflight sync is the mirror-friendly mode.
 
-It syncs only repositories that Portico has never synced or that are stale according to Portico’s sync stamp metadata.
+It syncs only repositories that Portico has never synced or that are stale according to Portico's sync stamp metadata.
 
 Preflight sync all enabled repositories:
 
@@ -512,7 +522,7 @@ Portico removal behavior:
 - allows forced removal with `--force`
 - warns when forced removal affects installed packages
 - verifies the repository no longer appears enabled after disabling
-- removes Portico’s own sync stamp after successful removal
+- removes Portico's own sync stamp after successful removal
 
 Forced removal:
 
@@ -613,7 +623,7 @@ sudo emerge app-portage/gentoolkit
 
 Repository management requires Gentoo repository tooling to be configured on the system.
 
-Portico is written in Go. It should compile anywhere Go supports, but Portico’s runtime behavior depends on Gentoo and Portage being available.
+Portico is written in Go. It should compile anywhere Go supports, but Portico's runtime behavior depends on Gentoo and Portage being available.
 
 ## Contributions
 
@@ -636,7 +646,7 @@ Good contribution areas include:
 
 Bug fixes are especially welcome. Portico interacts with real system package management, so small correctness fixes matter a lot. If Portico parses Portage output incorrectly, writes config too broadly, misses an edge case, or explains a risky operation poorly, that is worth fixing.
 
-i18n help is also especially welcome. Portico’s user-facing text lives in:
+i18n help is also especially welcome. Portico's user-facing text lives in:
 
 ```text
 internal/i18n/locales/
@@ -648,7 +658,7 @@ The English locale is the source language:
 internal/i18n/locales/en.toml
 ```
 
-Translations should preserve Portico’s tone: clear, cautious, and friendly, without hiding what Portage is doing.
+Translations should preserve Portico's tone: clear, cautious, and friendly, without hiding what Portage is doing.
 
 When adding or changing user-facing strings, prefer i18n keys over hardcoded text.
 
@@ -674,7 +684,7 @@ Build with an injected version:
 
 ```sh
 go build \
-  -ldflags "-X github.com/catielanier/portico/internal/cli.version=0.5.0" \
+  -ldflags "-X github.com/catielanier/portico/internal/cli.version=0.5.4" \
   -o portico \
   ./cmd/portico
 ```
