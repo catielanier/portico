@@ -52,6 +52,87 @@ Portico will not:
 
 Portico should make Gentoo package management easier to follow, not less transparent.
 
+## Installation
+
+Portico is available from the Gentoo GURU repository as:
+
+```text
+app-portage/portico
+```
+
+### Enable GURU
+
+If GURU is not already enabled:
+
+```sh
+sudo eselect repository enable guru
+sudo emaint sync -r guru
+```
+
+Portico is currently keyworded for testing on amd64:
+
+```text
+~amd64
+```
+
+To accept the testing keyword specifically for Portico:
+
+```sh
+sudo mkdir -p /etc/portage/package.accept_keywords
+echo "app-portage/portico ~amd64" | sudo tee /etc/portage/package.accept_keywords/90-portico
+```
+
+Then install Portico normally:
+
+```sh
+sudo emerge --ask app-portage/portico
+```
+
+This accepts `~amd64` only for Portico. It does not globally enable testing packages on the system.
+
+Once installed:
+
+```sh
+portico --version
+```
+
+should report the installed Portico release.
+
+### Testing on other architectures
+
+Portico is currently keyworded only for `~amd64`.
+
+Testing on other Gentoo architectures is welcome, but should currently be considered experimental and unsupported.
+
+Because the ebuild does not yet carry keywords for other architectures, testers can explicitly allow Portico regardless of its current keyword state:
+
+```sh
+sudo mkdir -p /etc/portage/package.accept_keywords
+echo "app-portage/portico **" | sudo tee /etc/portage/package.accept_keywords/90-portico
+```
+
+Then install normally:
+
+```sh
+sudo emerge --ask app-portage/portico
+```
+
+Using `**` here is intentionally broader than accepting a normal testing keyword. It is intended only for users deliberately testing Portico on architectures for which the package has not yet been keyworded.
+
+Portico's Go code is intended to be architecture-independent, but its interaction with Portage output and Gentoo system state needs real-world testing across architectures.
+
+If you encounter a bug while testing Portico on a non-amd64 architecture, **please include your architecture and Gentoo profile in the bug report**.
+
+The output of these commands is particularly useful:
+
+```sh
+uname -m
+eselect profile show
+emerge --info
+```
+
+Reports from non-amd64 systems are especially valuable as Portico works toward broader architecture support.
+
 ## Commands
 
 Portico supports routed help for every command:
@@ -300,6 +381,40 @@ With no package arguments, Portico updates `@world`.
 With package arguments, Portico updates only the selected packages.
 
 Portico previews the transaction before running the update.
+
+### Portico can update Portico
+
+Because:
+
+```sh
+sudo portico update
+```
+
+updates the world set through Portage, an installed copy of Portico that belongs to `@world` **should update itself when a newer eligible Portico version is available**.
+
+In other words, this:
+
+```sh
+sudo portico update
+```
+
+should eventually include:
+
+```text
+app-portage/portico
+```
+
+in the transaction whenever Portage determines that the installed Portico package needs to be updated.
+
+Portico does not implement a separate self-update mechanism. Portage remains responsible for resolving and installing the newer version.
+
+You can also explicitly request a Portico update:
+
+```sh
+sudo portico update app-portage/portico
+```
+
+If a newer eligible version is available and Portage would normally update Portico, but `sudo portico update` does not include it in the world update, please report that behavior as a bug.
 
 Current limitation: update can handle some package-specific license requirements, but update-time USE autounmask changes are not fully supported yet.
 
