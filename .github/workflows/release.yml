@@ -62,24 +62,21 @@ jobs:
             -o "dist/${ARCHIVE_NAME}.tar.gz" \
             "${GITHUB_REF_NAME}"
 
-      - name: Create vendor archive
+      - name: Create Go dependency archive
         shell: bash
         run: |
           ARCHIVE_NAME="${{ steps.version.outputs.archive_name }}"
+          GOMODCACHE_DIR="${PWD}/go-mod"
 
-          TMPDIR="$(mktemp -d)"
-          trap 'rm -rf "${TMPDIR}"' EXIT
+          rm -rf "${GOMODCACHE_DIR}"
+          mkdir -p "${GOMODCACHE_DIR}" dist
 
-          tar -xzf "dist/${ARCHIVE_NAME}.tar.gz" -C "${TMPDIR}"
+          env GOMODCACHE="${GOMODCACHE_DIR}" go mod download -modcacherw
 
-          (
-            cd "${TMPDIR}/${ARCHIVE_NAME}"
-            go mod vendor
-          )
-
-          tar -C "${TMPDIR}" \
-            -czf "dist/${ARCHIVE_NAME}-vendor.tar.gz" \
-            "${ARCHIVE_NAME}/vendor"
+          XZ_OPT='-T0 -9' tar \
+            -C "${PWD}" \
+            -cJf "dist/${ARCHIVE_NAME}-deps.tar.xz" \
+            go-mod
 
       - name: Create release notes from changelog
         shell: bash
@@ -114,8 +111,14 @@ jobs:
       - name: Create checksums
         shell: bash
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCHIVE_NAME="portico-${VERSION}"
+
           cd dist
-          sha256sum *.tar.gz > checksums.txt
+          sha256sum \
+            "${ARCHIVE_NAME}.tar.gz" \
+            "${ARCHIVE_NAME}-deps.tar.xz" \
+            > checksums.txt
 
       - name: Create release
         env:
@@ -127,7 +130,7 @@ jobs:
 
           gh release create "${GITHUB_REF_NAME}" \
             "dist/${ARCHIVE_NAME}.tar.gz" \
-            "dist/${ARCHIVE_NAME}-vendor.tar.gz" \
+            "dist/${ARCHIVE_NAME}-deps.tar.xz" \
             "dist/checksums.txt" \
             --title "Portico ${VERSION}" \
             --notes-file "dist/release-notes.md" \
