@@ -426,6 +426,84 @@ other = "↑/↓ or k/j Navigate   Space Toggle"
 [use_picker_help_buttons]
 other = "←/→ or h/l Move buttons   Enter Select"
 
+[use_picker_confirm_disabled]
+other = "Confirm unavailable"
+
+[use_picker_required_use_heading]
+other = "REQUIRED_USE conflict:"
+
+[use_picker_required_use_validation_unavailable]
+other = "Portico could not validate this REQUIRED_USE expression live. Portage will verify it during the transaction preview."
+
+[use_picker_required_use_blocked]
+other = "Resolve the conflicting USE selection before confirming."
+
+[use_picker_required_use_flag_enabled]
+other = "`{{.Flag}}` must be enabled."
+
+[use_picker_required_use_flag_disabled]
+other = "`{{.Flag}}` must be disabled."
+
+[use_picker_required_use_any_flags]
+other = "At least one of these flags must be enabled: {{.Terms}}."
+
+[use_picker_required_use_any_conditions]
+other = "At least one of these conditions must be satisfied: {{.Terms}}."
+
+[use_picker_required_use_exactly_one_flags]
+other = "Exactly one of these flags must be enabled: {{.Terms}}."
+
+[use_picker_required_use_exactly_one_conditions]
+other = "Exactly one of these conditions must be satisfied: {{.Terms}}."
+
+[use_picker_required_use_at_most_one_flags]
+other = "At most one of these flags may be enabled: {{.Terms}}."
+
+[use_picker_required_use_at_most_one_conditions]
+other = "At most one of these conditions may be satisfied: {{.Terms}}."
+
+[use_picker_required_use_expression_invalid]
+other = "This REQUIRED_USE expression is not satisfied: {{.Expression}}"
+
+[use_picker_required_use_active_condition]
+other = "Active condition: {{.Conditions}}."
+
+[use_picker_required_use_condition]
+other = "{{.Flag}}={{.State}}"
+
+[use_picker_required_use_state_enabled]
+other = "enabled"
+
+[use_picker_required_use_state_disabled]
+other = "disabled"
+
+[required_use_fallback_detected]
+other = "Portage found a REQUIRED_USE conflict for {{.Atom}}."
+
+[required_use_fallback_reopen_picker]
+other = "Portico will reopen the USE picker with the conflicting constraint active. Confirm remains unavailable until the selection is valid."
+
+[required_use_fallback_applied]
+other = "Applied the confirmed REQUIRED_USE resolution for {{.Atom}} to the temporary sandbox. Portico will retry dependency resolution."
+
+[required_use_fallback_cancelled]
+other = "REQUIRED_USE resolution cancelled."
+
+[required_use_fallback_missing_expression]
+other = "Portage reported a REQUIRED_USE failure for {{.Atom}}, but Portico could not find the failing expression."
+
+[required_use_fallback_unparseable]
+other = "Portage reported a REQUIRED_USE failure for {{.Atom}}, but Portico cannot safely interpret this expression yet: {{.Expression}}"
+
+[required_use_fallback_package_unknown]
+other = "Portage reported a REQUIRED_USE failure, but Portico could not identify the affected package."
+
+[required_use_fallback_no_use_flags]
+other = "Portage reported a REQUIRED_USE failure for {{.Atom}}, but Portico could not load its USE flags for interactive resolution."
+
+[required_use_fallback_no_changes]
+other = "The REQUIRED_USE conflict for {{.Atom}} is still unresolved because no USE changes were selected."
+
 [install_progress_preparing]
 other = "Preparing emerge transaction..."
 

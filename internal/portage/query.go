@@ -1,21 +1,20 @@
-// internal/portage/query.go
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 package portage
 
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 )
 
 type PackageQuery struct {
-	Atom    string
-	Uses    []UseFlag
-	RawUses string
-	Found   bool
+	Atom        string
+	Uses        []UseFlag
+	RawUses     string
+	RequiredUse string
+	Found       bool
 }
 
 type UseFlag struct {
@@ -30,10 +29,18 @@ type PackageQuerier interface {
 	Query(atom string) (*PackageQuery, error)
 }
 
-type EqueryQuerier struct{}
+type EqueryQuerier struct {
+	ConfigRoot string
+}
 
 func NewEqueryQuerier() *EqueryQuerier {
 	return &EqueryQuerier{}
+}
+
+func NewEqueryQuerierWithConfigRoot(configRoot string) *EqueryQuerier {
+	return &EqueryQuerier{
+		ConfigRoot: strings.TrimSpace(configRoot),
+	}
 }
 
 func (q *EqueryQuerier) Query(atom string) (*PackageQuery, error) {
@@ -49,16 +56,23 @@ func (q *EqueryQuerier) Query(atom string) (*PackageQuery, error) {
 
 	uses := ParseEqueryUses(rawUses)
 
+	// REQUIRED_USE is version-specific ebuild metadata. If metadata lookup is
+	// unavailable for a particular atom, keep the normal query usable and let
+	// the authoritative emerge --pretend pass catch any constraint failure.
+	requiredUse, _ := q.requiredUse(atom)
+
 	return &PackageQuery{
-		Atom:    atom,
-		Uses:    uses,
-		RawUses: rawUses,
-		Found:   len(uses) > 0,
+		Atom:        atom,
+		Uses:        uses,
+		RawUses:     rawUses,
+		RequiredUse: strings.TrimSpace(requiredUse),
+		Found:       len(uses) > 0,
 	}, nil
 }
 
 func (q *EqueryQuerier) equeryUses(atom string) (string, error) {
 	cmd := exec.Command("equery", "-C", "-N", "u", atom)
+	cmd.Env = q.commandEnv()
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -75,6 +89,111 @@ func (q *EqueryQuerier) equeryUses(atom string) (string, error) {
 	}
 
 	return stdout.String(), nil
+}
+
+func (q *EqueryQuerier) requiredUse(atom string) (string, error) {
+	metadataTarget, err := q.bestVisibleEbuild(atom)
+	if err != nil {
+		return "", err
+	}
+
+	if repository := repositoryQualifier(atom); repository != "" {
+		metadataTarget += "::" + repository
+	}
+
+	cmd := exec.Command(
+		"portageq",
+		"metadata",
+		"/",
+		"ebuild",
+		metadataTarget,
+		"REQUIRED_USE",
+	)
+	cmd.Env = q.commandEnv()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("portageq metadata failed: %s", strings.TrimSpace(stderr.String()))
+		}
+
+		return "", fmt.Errorf("portageq metadata failed: %w", err)
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func (q *EqueryQuerier) bestVisibleEbuild(atom string) (string, error) {
+	cmd := exec.Command(
+		"portageq",
+		"best_visible",
+		"/",
+		"ebuild",
+		atom,
+	)
+	cmd.Env = q.commandEnv()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("portageq best_visible failed: %s", strings.TrimSpace(stderr.String()))
+		}
+
+		return "", fmt.Errorf("portageq best_visible failed: %w", err)
+	}
+
+	best := strings.TrimSpace(stdout.String())
+	if best == "" {
+		return "", fmt.Errorf("portageq best_visible returned no package for %s", atom)
+	}
+
+	return best, nil
+}
+
+func repositoryQualifier(atom string) string {
+	_, repository, found := strings.Cut(strings.TrimSpace(atom), "::")
+	if !found {
+		return ""
+	}
+
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return ""
+	}
+
+	if end := strings.IndexAny(repository, "[ \t\r\n"); end >= 0 {
+		repository = repository[:end]
+	}
+
+	return repository
+}
+
+func (q *EqueryQuerier) commandEnv() []string {
+	configRoot := strings.TrimSpace(q.ConfigRoot)
+	if configRoot == "" {
+		return os.Environ()
+	}
+
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, value := range os.Environ() {
+		if strings.HasPrefix(value, "PORTAGE_CONFIGROOT=") {
+			continue
+		}
+
+		env = append(env, value)
+	}
+
+	return append(env, "PORTAGE_CONFIGROOT="+configRoot)
 }
 
 func ParseEqueryUses(raw string) []UseFlag {

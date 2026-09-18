@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/catielanier/portico/internal/i18n"
+	"github.com/catielanier/portico/internal/portage"
 	"github.com/catielanier/portico/internal/useflags"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -41,11 +42,15 @@ type UsePickerModel struct {
 
 	FocusedAction usePickerAction
 
+	RequiredUseExpression *portage.RequiredUseExpression
+	RequiredUseParseError error
+	RequiredUseViolations []portage.RequiredUseViolation
+
 	Done      bool
 	Cancelled bool
 }
 
-func NewUsePickerModel(atom string, selections []useflags.FlagSelection) UsePickerModel {
+func NewUsePickerModel(atom string, selections []useflags.FlagSelection, requiredUse string) UsePickerModel {
 	model := UsePickerModel{
 		Atom:          atom,
 		Selections:    selections,
@@ -57,6 +62,11 @@ func NewUsePickerModel(atom string, selections []useflags.FlagSelection) UsePick
 		FocusedAction: usePickerActionConfirm,
 	}
 
+	if strings.TrimSpace(requiredUse) != "" {
+		model.RequiredUseExpression, model.RequiredUseParseError = portage.ParseRequiredUseExpression(requiredUse)
+	}
+
+	model.refreshRequiredUseValidation()
 	model.clampPageAndCursor()
 	model.resetFocusedActionForPage()
 
@@ -188,7 +198,11 @@ func (m UsePickerModel) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(m.renderHighlightedDescription())
+	if m.hasRequiredUseNotice() {
+		b.WriteString(m.renderRequiredUseNotice())
+	} else {
+		b.WriteString(m.renderHighlightedDescription())
+	}
 	b.WriteString("\n")
 
 	b.WriteString(m.t("use_picker_help_navigation", nil))
@@ -250,7 +264,17 @@ func (m *UsePickerModel) toggleCurrentFlag() {
 		return
 	}
 
+	wasBlocked := !m.canConfirm()
+
 	m.Selections[m.Cursor].Selection = m.Selections[m.Cursor].Selection.Next()
+	m.refreshRequiredUseValidation()
+	m.clampPageAndCursor()
+
+	if wasBlocked && m.canConfirm() && m.confirmIsDisplayed() {
+		m.FocusedAction = usePickerActionConfirm
+	}
+
+	m.ensureFocusedActionIsAvailable()
 }
 
 func (m UsePickerModel) activateFocusedAction() (tea.Model, tea.Cmd) {
@@ -278,6 +302,11 @@ func (m UsePickerModel) activateFocusedAction() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case usePickerActionConfirm:
+		if !m.canConfirm() {
+			m.ensureFocusedActionIsAvailable()
+			return m, nil
+		}
+
 		m.Done = true
 		return m, tea.Quit
 
@@ -358,7 +387,7 @@ func (m *UsePickerModel) ensureFocusedActionIsAvailable() {
 		}
 	}
 
-	m.FocusedAction = m.primaryAction()
+	m.FocusedAction = actions[m.primaryActionIndex(actions)]
 }
 
 func (m *UsePickerModel) resetFocusedActionForPage() {
@@ -383,17 +412,23 @@ func (m UsePickerModel) primaryAction() usePickerAction {
 }
 
 func (m UsePickerModel) renderButtons() string {
-	actions := m.availableActions()
+	actions := m.displayActions()
 	labels := make([]string, 0, len(actions))
 
 	for _, action := range actions {
-		labels = append(labels, renderUsePickerButton(m.actionLabel(action), m.FocusedAction == action))
+		disabled := action == usePickerActionConfirm && !m.canConfirm()
+		label := m.actionLabel(action)
+		if disabled {
+			label = m.t("use_picker_confirm_disabled", nil)
+		}
+
+		labels = append(labels, renderUsePickerButton(label, m.FocusedAction == action, disabled))
 	}
 
 	return strings.Join(labels, "   ")
 }
 
-func (m UsePickerModel) availableActions() []usePickerAction {
+func (m UsePickerModel) displayActions() []usePickerAction {
 	if m.pageCount() <= 1 {
 		return []usePickerAction{
 			usePickerActionConfirm,
@@ -423,6 +458,21 @@ func (m UsePickerModel) availableActions() []usePickerAction {
 	}
 }
 
+func (m UsePickerModel) availableActions() []usePickerAction {
+	display := m.displayActions()
+	actions := make([]usePickerAction, 0, len(display))
+
+	for _, action := range display {
+		if action == usePickerActionConfirm && !m.canConfirm() {
+			continue
+		}
+
+		actions = append(actions, action)
+	}
+
+	return actions
+}
+
 func (m UsePickerModel) actionLabel(action usePickerAction) string {
 	switch action {
 	case usePickerActionPrev:
@@ -438,12 +488,160 @@ func (m UsePickerModel) actionLabel(action usePickerAction) string {
 	}
 }
 
-func renderUsePickerButton(label string, focused bool) string {
+func renderUsePickerButton(label string, focused bool, disabled bool) string {
+	if disabled {
+		return "  " + label + "  "
+	}
+
 	if focused {
 		return "[ " + label + " ]"
 	}
 
 	return "  " + label + "  "
+}
+
+func (m *UsePickerModel) refreshRequiredUseValidation() {
+	m.RequiredUseViolations = nil
+
+	if m.RequiredUseExpression == nil || m.RequiredUseParseError != nil {
+		return
+	}
+
+	m.RequiredUseViolations = m.RequiredUseExpression.Violations(
+		useflags.EffectiveEnabledMap(m.Selections),
+	)
+}
+
+func (m UsePickerModel) canConfirm() bool {
+	return len(m.RequiredUseViolations) == 0
+}
+
+func (m UsePickerModel) confirmIsDisplayed() bool {
+	for _, action := range m.displayActions() {
+		if action == usePickerActionConfirm {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (m UsePickerModel) hasRequiredUseNotice() bool {
+	return m.RequiredUseParseError != nil || len(m.RequiredUseViolations) > 0
+}
+
+func (m UsePickerModel) renderRequiredUseNotice() string {
+	var lines []string
+
+	if m.RequiredUseParseError != nil {
+		lines = append(lines, m.t("use_picker_required_use_validation_unavailable", nil))
+	} else {
+		for _, violation := range m.RequiredUseViolations {
+			lines = append(lines, m.renderRequiredUseViolation(violation))
+
+			if len(violation.Context) > 0 {
+				lines = append(lines, m.t("use_picker_required_use_active_condition", map[string]any{
+					"Conditions": m.renderRequiredUseConditions(violation.Context),
+				}))
+			}
+		}
+
+		lines = append(lines, m.t("use_picker_required_use_blocked", nil))
+	}
+
+	width := m.descriptionWidth()
+	wrapped := make([]string, 0, descriptionMaxRows)
+
+	for _, line := range lines {
+		wrapped = append(wrapped, wrapText(line, width)...)
+	}
+
+	if len(wrapped) > descriptionMaxRows {
+		wrapped = append(wrapped[:descriptionMaxRows-1], "…")
+	}
+
+	var b strings.Builder
+	b.WriteString(m.t("use_picker_required_use_heading", nil))
+	b.WriteString("\n")
+
+	for _, line := range wrapped {
+		b.WriteString("  ")
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	for i := len(wrapped); i < descriptionMaxRows; i++ {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func (m UsePickerModel) renderRequiredUseViolation(violation portage.RequiredUseViolation) string {
+	switch violation.Kind {
+	case portage.RequiredUseFlag:
+		key := "use_picker_required_use_flag_enabled"
+		if violation.Negated {
+			key = "use_picker_required_use_flag_disabled"
+		}
+
+		return m.t(key, map[string]any{
+			"Flag": violation.Flag,
+		})
+
+	case portage.RequiredUseAnyOf:
+		key := "use_picker_required_use_any_flags"
+		if !violation.SimpleFlags {
+			key = "use_picker_required_use_any_conditions"
+		}
+
+		return m.t(key, map[string]any{
+			"Terms": strings.Join(violation.Terms, ", "),
+		})
+
+	case portage.RequiredUseExactlyOne:
+		key := "use_picker_required_use_exactly_one_flags"
+		if !violation.SimpleFlags {
+			key = "use_picker_required_use_exactly_one_conditions"
+		}
+
+		return m.t(key, map[string]any{
+			"Terms": strings.Join(violation.Terms, ", "),
+		})
+
+	case portage.RequiredUseAtMostOne:
+		key := "use_picker_required_use_at_most_one_flags"
+		if !violation.SimpleFlags {
+			key = "use_picker_required_use_at_most_one_conditions"
+		}
+
+		return m.t(key, map[string]any{
+			"Terms": strings.Join(violation.Terms, ", "),
+		})
+
+	default:
+		return m.t("use_picker_required_use_expression_invalid", map[string]any{
+			"Expression": violation.Expression,
+		})
+	}
+}
+
+func (m UsePickerModel) renderRequiredUseConditions(conditions []portage.RequiredUseCondition) string {
+	parts := make([]string, 0, len(conditions))
+
+	for _, condition := range conditions {
+		state := m.t("use_picker_required_use_state_disabled", nil)
+		if condition.Enabled {
+			state = m.t("use_picker_required_use_state_enabled", nil)
+		}
+
+		parts = append(parts, m.t("use_picker_required_use_condition", map[string]any{
+			"Flag":  condition.Flag,
+			"State": state,
+		}))
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 func (m UsePickerModel) renderHighlightedDescription() string {
@@ -661,12 +859,12 @@ func runeLen(value string) int {
 	return utf8.RuneCountInString(value)
 }
 
-func RunUsePicker(atom string, selections []useflags.FlagSelection) ([]useflags.FlagSelection, bool, error) {
+func RunUsePicker(atom string, selections []useflags.FlagSelection, requiredUse string) ([]useflags.FlagSelection, bool, error) {
 	if len(selections) == 0 {
 		return selections, true, nil
 	}
 
-	model := NewUsePickerModel(atom, selections)
+	model := NewUsePickerModel(atom, selections, requiredUse)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	finalModel, err := program.Run()
