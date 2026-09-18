@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/catielanier/portico/internal/portage"
+	"github.com/catielanier/portico/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -35,9 +36,9 @@ var queryCmd = &cobra.Command{
 }
 
 func renderQueryResult(result *portage.PackageQuery) {
-	fmt.Println("Portico Query")
+	fmt.Println(ui.Selected("Portico Query"))
 	fmt.Println()
-	fmt.Println("Package:")
+	fmt.Println(ui.Accent("Package:"))
 	fmt.Printf("  %s\n", result.Atom)
 	fmt.Println()
 
@@ -56,7 +57,7 @@ func renderQueryResult(result *portage.PackageQuery) {
 	renderUseFlagSummary(result)
 
 	fmt.Println()
-	fmt.Println("Next:")
+	fmt.Println(ui.Accent("Next:"))
 	fmt.Printf("  sudo portico install %s\n", result.Atom)
 	fmt.Printf("  sudo portico rebuild %s\n", result.Atom)
 }
@@ -67,7 +68,7 @@ func renderUseFlagSummary(result *portage.PackageQuery) {
 	}
 
 	if len(result.Uses) == 0 {
-		fmt.Println("USE flags:")
+		fmt.Println(ui.Accent("USE flags:"))
 		fmt.Println()
 		fmt.Println("  No USE flags found.")
 		return
@@ -81,11 +82,11 @@ func renderUseFlagSummary(result *portage.PackageQuery) {
 		}
 	}
 
-	fmt.Println("USE flags for:")
+	fmt.Println(ui.Accent("USE flags for:"))
 	fmt.Printf("  %s\n", result.Atom)
 	fmt.Println()
 
-	fmt.Println("Legend:")
+	fmt.Println(ui.Accent("Legend:"))
 	fmt.Println("  U = flag setting for next build")
 	if showInstalledColumn {
 		fmt.Println("  I = flag setting on installed package")
@@ -99,18 +100,18 @@ func renderUseFlagSummary(result *portage.PackageQuery) {
 	}
 
 	for _, flag := range result.Uses {
-		useState := "-"
+		useState := ui.Error("-")
 		if flag.EnabledForBuild {
-			useState = "+"
+			useState = ui.Success("+")
 		}
 
 		if showInstalledColumn {
-			installedState := "?"
+			installedState := ui.Muted("?")
 			if flag.Installed != nil {
 				if *flag.Installed {
-					installedState = "+"
+					installedState = ui.Muted("+")
 				} else {
-					installedState = "-"
+					installedState = ui.Muted("-")
 				}
 			}
 

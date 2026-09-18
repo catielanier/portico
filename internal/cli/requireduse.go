@@ -49,13 +49,13 @@ func resolveRequiredUseFailureInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println(translator.T("required_use_fallback_detected", map[string]any{
+	fmt.Println(ui.Warning(translator.T("required_use_fallback_detected", map[string]any{
 		"Atom": displayAtom,
-	}))
+	})))
 	fmt.Println()
-	fmt.Printf("  %s\n", expression)
+	fmt.Printf("  %s\n", ui.Warning(expression))
 	fmt.Println()
-	fmt.Println(translator.T("required_use_fallback_reopen_picker", nil))
+	fmt.Println(ui.Info(translator.T("required_use_fallback_reopen_picker", nil)))
 	fmt.Println()
 
 	queryAtom := strings.TrimSpace(failure.ExactAtom)
@@ -88,7 +88,7 @@ func resolveRequiredUseFailureInSandbox(
 		return true, err
 	}
 	if !ok {
-		fmt.Println(translator.T("required_use_fallback_cancelled", nil))
+		fmt.Println(ui.Warning(translator.T("required_use_fallback_cancelled", nil)))
 		return true, errRequiredUseResolutionCancelled
 	}
 
@@ -122,9 +122,9 @@ func resolveRequiredUseFailureInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println(translator.T("required_use_fallback_applied", map[string]any{
+	fmt.Println(ui.Success(translator.T("required_use_fallback_applied", map[string]any{
 		"Atom": configAtom,
-	}))
+	})))
 
 	return true, nil
 }

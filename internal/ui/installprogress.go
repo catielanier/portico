@@ -56,11 +56,14 @@ func RunInstallProgress(
 		close(events)
 	}()
 
+	spin := spinner.New()
+	styleSpinner(&spin.Style)
+
 	model := installProgressModel{
 		label:      label,
 		translator: i18n.MustDefault(),
-		bar:        progress.New(),
-		spin:       spinner.New(),
+		bar:        newSemanticProgress(),
+		spin:       spin,
 		events:     events,
 		done:       done,
 		ctx:        ctx,
@@ -146,10 +149,10 @@ func (m installProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m installProgressModel) View() string {
 	if m.doneRendering {
 		if m.err != nil {
-			return fmt.Sprintf("✗ %s\n", m.label)
+			return fmt.Sprintf("%s %s\n", Error("✗"), m.label)
 		}
 
-		return fmt.Sprintf("✓ %s\n", m.label)
+		return fmt.Sprintf("%s %s\n", Success("✓"), m.label)
 	}
 
 	currentPackage := m.currentPackage
@@ -199,14 +202,14 @@ func (m installProgressModel) View() string {
 
 	return fmt.Sprintf(
 		"%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s\n\n%s\n",
-		m.label,
-		m.t("install_progress_compilation_notice", nil),
+		Selected(m.label),
+		Info(m.t("install_progress_compilation_notice", nil)),
 		installLine,
-		packageLine,
-		progressLine,
+		Muted(packageLine),
+		Muted(progressLine),
 		m.bar.ViewAs(percent),
-		completedLine,
-		m.t("install_progress_cancel_hint", nil),
+		Muted(completedLine),
+		Muted(m.t("install_progress_cancel_hint", nil)),
 	)
 }
 

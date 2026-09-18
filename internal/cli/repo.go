@@ -7,6 +7,7 @@ import (
 
 	"github.com/catielanier/portico/internal/i18n"
 	"github.com/catielanier/portico/internal/repo"
+	"github.com/catielanier/portico/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -55,11 +56,11 @@ func newRepoListCommand(commandName string, manager *repo.Manager, translator *i
 			}
 
 			if len(repositories) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_list_empty", nil))
+				fmt.Fprintln(cmd.OutOrStdout(), ui.Muted(translator.T("repo_list_empty", nil)))
 				return nil
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_list_heading", nil))
+			fmt.Fprintln(cmd.OutOrStdout(), ui.Accent(translator.T("repo_list_heading", nil)))
 
 			for _, repository := range repositories {
 				fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", repository.Name)
@@ -86,17 +87,17 @@ func newRepoAddCommand(commandName string, manager *repo.Manager, translator *i1
 				return err
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_add_enabling", map[string]any{
+			fmt.Fprintln(cmd.OutOrStdout(), ui.Info(translator.T("repo_add_enabling", map[string]any{
 				"Repository": name,
-			}))
+			})))
 
 			if err := manager.Add(name); err != nil {
 				return err
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_add_success", map[string]any{
+			fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_add_success", map[string]any{
 				"Repository": name,
-			}))
+			})))
 
 			return nil
 		},
@@ -148,17 +149,17 @@ func runRepoSyncOne(cmd *cobra.Command, manager *repo.Manager, translator *i18n.
 		return err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_start", map[string]any{
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Info(translator.T("repo_sync_start", map[string]any{
 		"Repository": name,
-	}))
+	})))
 
 	if err := manager.Sync(name); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_success", map[string]any{
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_sync_success", map[string]any{
 		"Repository": name,
-	}))
+	})))
 
 	return nil
 }
@@ -168,7 +169,7 @@ func runRepoSyncAll(cmd *cobra.Command, manager *repo.Manager, translator *i18n.
 		return err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_start", nil))
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Info(translator.T("repo_sync_all_start", nil)))
 
 	decisions, err := manager.SyncEnabled()
 	if err != nil {
@@ -176,19 +177,19 @@ func runRepoSyncAll(cmd *cobra.Command, manager *repo.Manager, translator *i18n.
 	}
 
 	if len(decisions) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_empty", nil))
+		fmt.Fprintln(cmd.OutOrStdout(), ui.Muted(translator.T("repo_sync_all_empty", nil)))
 		return nil
 	}
 
 	for _, decision := range decisions {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_synced", map[string]any{
+		fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_sync_all_synced", map[string]any{
 			"Repository": decision.Repository,
-		}))
+		})))
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_success", map[string]any{
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_sync_all_success", map[string]any{
 		"Synced": len(decisions),
-	}))
+	})))
 
 	return nil
 }
@@ -200,9 +201,9 @@ func runRepoSyncOnePreflight(cmd *cobra.Command, manager *repo.Manager, translat
 		return err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_preflight_start", map[string]any{
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Info(translator.T("repo_sync_preflight_start", map[string]any{
 		"Repository": name,
-	}))
+	})))
 
 	decision, err := manager.SyncIfNeeded(name, 0)
 	if err != nil {
@@ -219,7 +220,7 @@ func runRepoSyncAllPreflight(cmd *cobra.Command, manager *repo.Manager, translat
 		return err
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_preflight_start", nil))
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Info(translator.T("repo_sync_all_preflight_start", nil)))
 
 	decisions, err := manager.SyncEnabledIfNeeded(0)
 	if err != nil {
@@ -227,7 +228,7 @@ func runRepoSyncAllPreflight(cmd *cobra.Command, manager *repo.Manager, translat
 	}
 
 	if len(decisions) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_empty", nil))
+		fmt.Fprintln(cmd.OutOrStdout(), ui.Muted(translator.T("repo_sync_all_empty", nil)))
 		return nil
 	}
 
@@ -244,26 +245,26 @@ func runRepoSyncAllPreflight(cmd *cobra.Command, manager *repo.Manager, translat
 		renderSyncDecision(cmd, translator, decision)
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_all_preflight_success", map[string]any{
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_sync_all_preflight_success", map[string]any{
 		"Synced":  syncedCount,
 		"Skipped": skippedCount,
-	}))
+	})))
 
 	return nil
 }
 
 func renderSyncDecision(cmd *cobra.Command, translator *i18n.Translator, decision repo.SyncDecision) {
 	if decision.ShouldSync {
-		fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_preflight_synced", map[string]any{
+		fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_sync_preflight_synced", map[string]any{
 			"Repository": decision.Repository,
 			"Reason":     string(decision.Reason),
-		}))
+		})))
 		return
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_sync_preflight_skipped", map[string]any{
+	fmt.Fprintln(cmd.OutOrStdout(), ui.Muted(translator.T("repo_sync_preflight_skipped", map[string]any{
 		"Repository": decision.Repository,
-	}))
+	})))
 }
 
 func newRepoRemoveCommand(commandName string, manager *repo.Manager, translator *i18n.Translator) *cobra.Command {
@@ -284,9 +285,9 @@ func newRepoRemoveCommand(commandName string, manager *repo.Manager, translator 
 				return err
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_remove_checking", map[string]any{
+			fmt.Fprintln(cmd.OutOrStdout(), ui.Info(translator.T("repo_remove_checking", map[string]any{
 				"Repository": name,
-			}))
+			})))
 
 			result, err := manager.Remove(name, force)
 			if err != nil {
@@ -309,9 +310,9 @@ func newRepoRemoveCommand(commandName string, manager *repo.Manager, translator 
 				renderForcedRepositoryRemoveWarning(cmd, translator, result)
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), translator.T("repo_remove_success", map[string]any{
+			fmt.Fprintln(cmd.OutOrStdout(), ui.Success(translator.T("repo_remove_success", map[string]any{
 				"Repository": name,
-			}))
+			})))
 
 			return nil
 		},
@@ -327,9 +328,9 @@ func renderProtectedRepositoryError(
 	translator *i18n.Translator,
 	err *repo.ProtectedRepositoryError,
 ) {
-	fmt.Fprintln(cmd.ErrOrStderr(), translator.T("repo_remove_protected", map[string]any{
+	fmt.Fprintln(cmd.ErrOrStderr(), ui.Error(translator.T("repo_remove_protected", map[string]any{
 		"Repository": err.Repository,
-	}))
+	})))
 }
 
 func renderRepositoryInUseError(
@@ -338,9 +339,9 @@ func renderRepositoryInUseError(
 	err *repo.RepositoryInUseError,
 	commandName string,
 ) {
-	fmt.Fprintln(cmd.ErrOrStderr(), translator.T("repo_remove_blocked", map[string]any{
+	fmt.Fprintln(cmd.ErrOrStderr(), ui.Error(translator.T("repo_remove_blocked", map[string]any{
 		"Repository": err.Repository,
-	}))
+	})))
 
 	renderInstalledPackageSample(cmd, translator, err.Packages)
 
@@ -356,10 +357,10 @@ func renderForcedRepositoryRemoveWarning(
 	translator *i18n.Translator,
 	result *repo.RemoveResult,
 ) {
-	fmt.Fprintln(cmd.ErrOrStderr(), translator.T("repo_remove_forced_warning", map[string]any{
+	fmt.Fprintln(cmd.ErrOrStderr(), ui.Warning(translator.T("repo_remove_forced_warning", map[string]any{
 		"Repository": result.Repository,
 		"Count":      len(result.InstalledPackages),
-	}))
+	})))
 
 	renderInstalledPackageSample(cmd, translator, result.InstalledPackages)
 

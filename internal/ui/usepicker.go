@@ -135,23 +135,23 @@ func (m UsePickerModel) View() string {
 	flagsPerPage := m.flagsPerPage()
 	start, end := m.visibleRange()
 
-	b.WriteString(m.t("use_picker_title", map[string]any{
+	b.WriteString(Selected(m.t("use_picker_title", map[string]any{
 		"Atom": m.Atom,
-	}))
+	})))
 	b.WriteString("\n\n")
 
 	if pageCount > 1 {
-		b.WriteString(m.t("use_picker_page", map[string]any{
+		b.WriteString(Muted(m.t("use_picker_page", map[string]any{
 			"Page":  m.Page + 1,
 			"Pages": pageCount,
-		}))
+		})))
 		b.WriteString("\n\n")
 	}
 
 	if m.hasInstalledColumn() {
-		b.WriteString(m.t("use_picker_header_with_installed", nil))
+		b.WriteString(Accent(m.t("use_picker_header_with_installed", nil)))
 	} else {
-		b.WriteString(m.t("use_picker_header_without_installed", nil))
+		b.WriteString(Accent(m.t("use_picker_header_without_installed", nil)))
 	}
 	b.WriteString("\n")
 
@@ -159,22 +159,28 @@ func (m UsePickerModel) View() string {
 		flag := m.Selections[i]
 
 		cursor := " "
+		flagName := flag.Name
 		if i == m.Cursor {
-			cursor = ">"
+			cursor = Selected(">")
+			flagName = Selected(flag.Name)
 		}
 
-		useState := "-"
+		useState := Error("-")
 		if flag.CurrentEnabled {
-			useState = "+"
+			useState = Success("+")
 		}
 
 		choice := "[ ]"
+		choiceStyle := CurrentStyles().Muted
 		switch flag.Selection {
 		case useflags.SelectionEnabled:
 			choice = "[+]"
+			choiceStyle = CurrentStyles().Success
 		case useflags.SelectionDisabled:
 			choice = "[-]"
+			choiceStyle = CurrentStyles().Error
 		}
+		choiceView := choiceStyle.Render(fmt.Sprintf("%-6s", choice))
 
 		if m.hasInstalledColumn() {
 			installedState := "?"
@@ -186,9 +192,9 @@ func (m UsePickerModel) View() string {
 				}
 			}
 
-			b.WriteString(fmt.Sprintf("%s %s %s  %-6s  %s\n", cursor, useState, installedState, choice, flag.Name))
+			b.WriteString(fmt.Sprintf("%s %s %s  %s  %s\n", cursor, useState, Muted(installedState), choiceView, flagName))
 		} else {
-			b.WriteString(fmt.Sprintf("%s %s  %-6s  %s\n", cursor, useState, choice, flag.Name))
+			b.WriteString(fmt.Sprintf("%s %s  %s  %s\n", cursor, useState, choiceView, flagName))
 		}
 	}
 
@@ -205,9 +211,9 @@ func (m UsePickerModel) View() string {
 	}
 	b.WriteString("\n")
 
-	b.WriteString(m.t("use_picker_help_navigation", nil))
+	b.WriteString(Muted(m.t("use_picker_help_navigation", nil)))
 	b.WriteString("\n")
-	b.WriteString(m.t("use_picker_help_buttons", nil))
+	b.WriteString(Muted(m.t("use_picker_help_buttons", nil)))
 	b.WriteString("\n\n")
 	b.WriteString(m.renderButtons())
 	b.WriteString("\n")
@@ -422,7 +428,12 @@ func (m UsePickerModel) renderButtons() string {
 			label = m.t("use_picker_confirm_disabled", nil)
 		}
 
-		labels = append(labels, renderUsePickerButton(label, m.FocusedAction == action, disabled))
+		labels = append(labels, renderUsePickerButton(
+			label,
+			m.FocusedAction == action,
+			disabled,
+			action == usePickerActionCancel,
+		))
 	}
 
 	return strings.Join(labels, "   ")
@@ -488,13 +499,18 @@ func (m UsePickerModel) actionLabel(action usePickerAction) string {
 	}
 }
 
-func renderUsePickerButton(label string, focused bool, disabled bool) string {
+func renderUsePickerButton(label string, focused bool, disabled bool, destructive bool) string {
 	if disabled {
-		return "  " + label + "  "
+		return Disabled("  " + label + "  ")
 	}
 
 	if focused {
-		return "[ " + label + " ]"
+		button := "[ " + label + " ]"
+		if destructive {
+			return Error(button)
+		}
+
+		return Selected(button)
 	}
 
 	return "  " + label + "  "
@@ -561,12 +577,12 @@ func (m UsePickerModel) renderRequiredUseNotice() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(m.t("use_picker_required_use_heading", nil))
+	b.WriteString(Warning(m.t("use_picker_required_use_heading", nil)))
 	b.WriteString("\n")
 
 	for _, line := range wrapped {
 		b.WriteString("  ")
-		b.WriteString(line)
+		b.WriteString(Warning(line))
 		b.WriteString("\n")
 	}
 
@@ -667,7 +683,7 @@ func (m UsePickerModel) renderHighlightedDescription() string {
 
 	var b strings.Builder
 
-	b.WriteString(m.t("use_picker_description_heading", nil))
+	b.WriteString(Accent(m.t("use_picker_description_heading", nil)))
 	b.WriteString("\n")
 
 	for _, line := range lines {

@@ -24,26 +24,29 @@ func renderPlan(p plan.Plan, t *i18n.Translator, includeConfirmation bool) strin
 		title = t.T(p.TitleKey, nil)
 	}
 
-	b.WriteString(title)
+	b.WriteString(Selected(title))
 	b.WriteString("\n\n")
 
 	if p.Action != "" {
-		b.WriteString("Action:\n")
+		b.WriteString(Accent("Action:"))
+		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("  %s\n\n", p.Action))
 	}
 
 	if len(p.Will) > 0 {
-		b.WriteString(t.T("plan_will", nil))
+		b.WriteString(Accent(t.T("plan_will", nil)))
 		b.WriteString("\n\n")
 
 		for _, item := range p.Will {
-			b.WriteString("  ✓ ")
+			b.WriteString("  ")
+			b.WriteString(Success("✓"))
+			b.WriteString(" ")
 			b.WriteString(t.T(item.Key, item.Data))
 
 			if item.Detail != "" {
 				b.WriteString("\n")
 				b.WriteString("    ")
-				b.WriteString(item.Detail)
+				b.WriteString(Muted(item.Detail))
 			}
 
 			b.WriteString("\n")
@@ -53,17 +56,19 @@ func renderPlan(p plan.Plan, t *i18n.Translator, includeConfirmation bool) strin
 	}
 
 	if len(p.WillNot) > 0 {
-		b.WriteString(t.T("plan_will_not", nil))
+		b.WriteString(Accent(t.T("plan_will_not", nil)))
 		b.WriteString("\n\n")
 
 		for _, item := range p.WillNot {
-			b.WriteString("  ✗ ")
+			b.WriteString("  ")
+			b.WriteString(Error("✗"))
+			b.WriteString(" ")
 			b.WriteString(t.T(item.Key, item.Data))
 
 			if item.Detail != "" {
 				b.WriteString("\n")
 				b.WriteString("    ")
-				b.WriteString(item.Detail)
+				b.WriteString(Muted(item.Detail))
 			}
 
 			b.WriteString("\n")
@@ -73,7 +78,7 @@ func renderPlan(p plan.Plan, t *i18n.Translator, includeConfirmation bool) strin
 	}
 
 	if includeConfirmation {
-		b.WriteString(t.T("confirm_continue", nil))
+		b.WriteString(Info(t.T("confirm_continue", nil)))
 		b.WriteString("\n")
 	}
 

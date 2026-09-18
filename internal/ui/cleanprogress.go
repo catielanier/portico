@@ -64,11 +64,14 @@ func RunCleanupProgress(
 		close(events)
 	}()
 
+	spin := spinner.New()
+	styleSpinner(&spin.Style)
+
 	model := cleanupProgressModel{
 		label:      label,
 		translator: i18n.MustDefault(),
-		bar:        progress.New(),
-		spin:       spinner.New(),
+		bar:        newSemanticProgress(),
+		spin:       spin,
 		events:     events,
 		done:       done,
 		ctx:        ctx,
@@ -171,10 +174,10 @@ func (m cleanupProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m cleanupProgressModel) View() string {
 	if m.doneRendering {
 		if m.err != nil {
-			return fmt.Sprintf("✗ %s\n", m.label)
+			return fmt.Sprintf("%s %s\n", Error("✗"), m.label)
 		}
 
-		return fmt.Sprintf("✓ %s\n", m.label)
+		return fmt.Sprintf("%s %s\n", Success("✓"), m.label)
 	}
 
 	if m.waiting {
@@ -228,13 +231,13 @@ func (m cleanupProgressModel) View() string {
 
 	return fmt.Sprintf(
 		"%s\n\n%s\n%s\n\n%s\n%s\n\n%s\n\n%s\n",
-		m.label,
+		Selected(m.label),
 		actionLine,
-		packageLine,
-		progressLine,
+		Muted(packageLine),
+		Muted(progressLine),
 		m.bar.ViewAs(percent),
-		completedLine,
-		m.t("cleanup_progress_cancel_hint", nil),
+		Muted(completedLine),
+		Muted(m.t("cleanup_progress_cancel_hint", nil)),
 	)
 }
 
@@ -245,12 +248,12 @@ func (m cleanupProgressModel) waitingView() string {
 	}
 
 	return fmt.Sprintf(
-		"%s\n\n%s\n\n%s\n\n%s\n\n[ %s ]\n",
-		m.label,
-		m.t("cleanup_progress_waiting_title", nil),
+		"%s\n\n%s\n\n%s\n\n%s\n\n%s\n",
+		Selected(m.label),
+		Warning(m.t("cleanup_progress_waiting_title", nil)),
 		message,
-		m.t("cleanup_progress_waiting_hint", nil),
-		m.t("common_cancel", nil),
+		Muted(m.t("cleanup_progress_waiting_hint", nil)),
+		Error("[ "+m.t("common_cancel", nil)+" ]"),
 	)
 }
 
