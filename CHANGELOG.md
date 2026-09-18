@@ -4,6 +4,72 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
+## 0.5.5
+
+### Added
+
+- Added live `REQUIRED_USE` validation to the interactive USE flag picker.
+  - Portico now checks the selected ebuild's `REQUIRED_USE` constraints while USE flags are being configured.
+  - The Confirm action is disabled while the current selection violates a `REQUIRED_USE` condition.
+  - Violations are displayed directly in the picker instead of allowing a known-invalid configuration to continue.
+  - Supports nested conditions and the common `REQUIRED_USE` operators:
+    - `|| ( ... )` — at least one
+    - `^^ ( ... )` — exactly one
+    - `?? ( ... )` — at most one
+    - conditional expressions such as `foo? ( bar !baz )`
+  - Existing `+` / `-` state indicators remain authoritative; color and warnings supplement rather than replace them.
+
+- Added a second `REQUIRED_USE` safety check during sandbox dependency resolution.
+  - `emerge --pretend` remains the authoritative transaction validator.
+  - If Portage reports a `REQUIRED_USE` failure that escaped live validation, Portico intercepts it instead of treating it as a generic pretend failure.
+  - Direct-package conflicts can return to USE configuration and retry through the temporary sandbox.
+  - Real Portage configuration is not modified until the resulting transaction is valid and confirmed.
+
+- Added centralized, theme-aware terminal color roles.
+  - Success indicators use terminal-theme green.
+  - Errors and blocked actions use terminal-theme red.
+  - Warnings use terminal-theme yellow.
+  - Informational highlights use terminal-theme cyan.
+  - Interactive focus uses a terminal-native accent style.
+  - Muted and disabled UI uses terminal-native dim styling.
+  - No RGB or hex palette is required for the default UI.
+
+- Added semantic colorization throughout Portico, including:
+  - plans and status indicators
+  - USE flag selection
+  - `REQUIRED_USE` warnings
+  - package source selection
+  - repository operations
+  - dependency and sandbox steps
+  - install and cleanup progress
+  - keyword, license, and mask handling
+  - query and search output
+
+- Added no-color handling.
+  - Respects `NO_COLOR`.
+  - Disables Portico-owned color with `CLICOLOR=0`.
+  - Degrades cleanly for `TERM=dumb`.
+  - Avoids ANSI styling when output is not attached to a terminal.
+
+- Added CI testing for pull requests.
+  - Pull requests now run the complete Go test suite with `go test ./...`.
+
+- Added automated Gentoo dependency archive generation for tagged releases.
+  - Version tags now produce:
+    - `portico-<version>.tar.gz`
+    - `portico-<version>-deps.tar.xz`
+  - The dependency archive uses a populated Go module cache suitable for the Portico Gentoo ebuild.
+
+### Changed
+
+- The USE picker now prevents confirmation of configurations Portico already knows violate the selected package's `REQUIRED_USE` rules.
+
+- Package metadata resolution for `REQUIRED_USE` now resolves the target package version through Portage before reading the ebuild metadata.
+
+- Progress-bar styling now uses Portico's terminal-native semantic palette instead of the default hardcoded RGB colors provided by the underlying UI component.
+
+- Interactive focus styling is now consistent across Portico while retaining non-color focus indicators for accessibility.
+
 ## [0.5.4] - 2026-09-11
 
 ### Added
