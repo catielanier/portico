@@ -137,9 +137,9 @@ func (m packageSourcePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m packageSourcePickerModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(m.t("source_picker_title", map[string]any{
+	b.WriteString(Selected(m.t("source_picker_title", map[string]any{
 		"Atom": m.atom,
-	}))
+	})))
 	b.WriteString("\n\n")
 
 	if len(m.candidates) == 0 {
@@ -148,7 +148,7 @@ func (m packageSourcePickerModel) View() string {
 		return b.String()
 	}
 
-	b.WriteString(m.t("source_picker_header", nil))
+	b.WriteString(Accent(m.t("source_picker_header", nil)))
 	b.WriteString("\n")
 
 	start := m.offset
@@ -162,46 +162,63 @@ func (m packageSourcePickerModel) View() string {
 		candidate := m.candidates[i]
 
 		cursor := " "
+		repository := fmt.Sprintf("%-18s", truncateSourcePickerText(candidate.Repository, 18))
+		version := fmt.Sprintf("%-16s", truncateSourcePickerText(candidate.Version, 16))
+		statusText := candidateStatus(candidate)
+		status := fmt.Sprintf("%-12s", truncateSourcePickerText(statusText, 12))
+		target := candidate.InstallTarget
+
+		switch statusText {
+		case "masked":
+			status = Warning(status)
+		case "live":
+			status = Info(status)
+		default:
+			status = Success(status)
+		}
+
 		if i == m.cursor {
-			cursor = ">"
+			cursor = Selected(">")
+			repository = Selected(repository)
+			target = Selected(target)
 		}
 
 		b.WriteString(fmt.Sprintf(
-			"%s %-18s %-16s %-12s %s\n",
+			"%s %s %s %s %s\n",
 			cursor,
-			truncateSourcePickerText(candidate.Repository, 18),
-			truncateSourcePickerText(candidate.Version, 16),
-			truncateSourcePickerText(candidateStatus(candidate), 12),
-			candidate.InstallTarget,
+			repository,
+			version,
+			status,
+			target,
 		))
 	}
 
 	if len(m.candidates) > m.height {
 		b.WriteString("\n")
-		b.WriteString(m.t("source_picker_scroll_position", map[string]any{
+		b.WriteString(Muted(m.t("source_picker_scroll_position", map[string]any{
 			"Current": m.cursor + 1,
 			"Total":   len(m.candidates),
-		}))
+		})))
 		b.WriteString("\n")
 	}
 
 	selected := m.candidates[m.cursor]
 
 	b.WriteString("\n")
-	b.WriteString(m.t("source_picker_selected_target", map[string]any{
+	b.WriteString(Info(m.t("source_picker_selected_target", map[string]any{
 		"Target": selected.InstallTarget,
-	}))
+	})))
 	b.WriteString("\n")
 
 	if selected.Masked && selected.MaskReason != "" {
-		b.WriteString(m.t("source_picker_selected_masked", map[string]any{
+		b.WriteString(Warning(m.t("source_picker_selected_masked", map[string]any{
 			"Reason": selected.MaskReason,
-		}))
+		})))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(m.t("source_picker_help", nil))
+	b.WriteString(Muted(m.t("source_picker_help", nil)))
 	b.WriteString("\n")
 
 	return b.String()

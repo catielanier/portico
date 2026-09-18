@@ -45,7 +45,7 @@ func maybeSyncNeverSyncedRepositories() error {
 		return nil
 	}
 
-	fmt.Println("Portico noticed some enabled repositories have not been synced yet:")
+	fmt.Println(ui.Warning("Portico noticed some enabled repositories have not been synced yet:"))
 	fmt.Println()
 
 	for _, repository := range neverSyncedRepositories {
@@ -53,7 +53,7 @@ func maybeSyncNeverSyncedRepositories() error {
 	}
 
 	fmt.Println()
-	fmt.Println("Packages from these repositories will not appear in search results until they are synced.")
+	fmt.Println(ui.Warning("Packages from these repositories will not appear in search results until they are synced."))
 	fmt.Println()
 
 	confirmed, err := confirmDefaultNo("Sync these repositories now?")
@@ -85,9 +85,9 @@ func maybeSyncNeverSyncedRepositories() error {
 }
 
 func renderFindResults(query string, results []portage.SearchResult) {
-	fmt.Println("Portico Find")
+	fmt.Println(ui.Selected("Portico Find"))
 	fmt.Println()
-	fmt.Println("Search:")
+	fmt.Println(ui.Accent("Search:"))
 	fmt.Printf("  %s\n", query)
 	fmt.Println()
 
@@ -96,7 +96,7 @@ func renderFindResults(query string, results []portage.SearchResult) {
 		return
 	}
 
-	fmt.Println("Matches:")
+	fmt.Println(ui.Accent("Matches:"))
 	fmt.Println()
 
 	for _, result := range results {
@@ -117,10 +117,18 @@ func renderFindResults(query string, results []portage.SearchResult) {
 					status = "available"
 				}
 
+				styledStatus := ui.Success(status)
+				switch strings.ToLower(status) {
+				case "masked":
+					styledStatus = ui.Warning(status)
+				case "live":
+					styledStatus = ui.Info(status)
+				}
+
 				if version == "" {
-					fmt.Printf("      %-10s %s\n", source.Repository, status)
+					fmt.Printf("      %-10s %s\n", source.Repository, styledStatus)
 				} else {
-					fmt.Printf("      %-10s %-12s %s\n", source.Repository, version, status)
+					fmt.Printf("      %-10s %-12s %s\n", source.Repository, version, styledStatus)
 				}
 			}
 		}
@@ -128,7 +136,7 @@ func renderFindResults(query string, results []portage.SearchResult) {
 		fmt.Println()
 	}
 
-	fmt.Println("Next:")
+	fmt.Println(ui.Accent("Next:"))
 	if len(results) == 1 {
 		fmt.Printf("  portico query %s\n", results[0].Atom)
 		fmt.Printf("  sudo portico install %s\n", results[0].Atom)

@@ -439,11 +439,11 @@ func applyRequiredUseChangesInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portage requires additional USE changes to proceed:")
+	fmt.Println(ui.Warning("Portage requires additional USE changes to proceed:"))
 	fmt.Println()
 
 	for _, change := range changes {
-		fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
+		fmt.Printf("  %s %s\n", change.Atom, renderUSEChangeTokens(change.Flags))
 
 		for _, requiredBy := range change.RequiredBy {
 			fmt.Printf("    required by: %s\n", requiredBy)
@@ -451,7 +451,7 @@ func applyRequiredUseChangesInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portico will apply these changes to the temporary sandbox and retry.")
+	fmt.Println(ui.Info("Portico will apply these changes to the temporary sandbox and retry."))
 
 	for _, change := range changes {
 		cleanedFlags := cleanStringList(change.Flags)
@@ -490,11 +490,11 @@ func applyRequiredKeywordChangesInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portage requires additional keywords to proceed:")
+	fmt.Println(ui.Warning("Portage requires additional keywords to proceed:"))
 	fmt.Println()
 
 	for _, change := range changes {
-		fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Keywords, " "))
+		fmt.Printf("  %s %s\n", change.Atom, renderInfoTokens(change.Keywords))
 
 		for _, requiredBy := range change.RequiredBy {
 			fmt.Printf("    required by: %s\n", requiredBy)
@@ -505,8 +505,8 @@ func applyRequiredKeywordChangesInSandbox(
 
 	if len(newKeywords) > 0 {
 		fmt.Println()
-		fmt.Println("Portico can allow these keywords for this transaction:")
-		fmt.Printf("  %s\n", strings.Join(newKeywords, " "))
+		fmt.Println(ui.Info("Portico can allow these keywords for this transaction:"))
+		fmt.Printf("  %s\n", renderInfoTokens(newKeywords))
 		fmt.Println()
 
 		confirmed, err := confirmDefaultNo("Allow these keywords for this transaction?")
@@ -541,7 +541,7 @@ func applyRequiredKeywordChangesInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portico applied these keyword changes to the temporary sandbox and will retry.")
+	fmt.Println(ui.Success("Portico applied these keyword changes to the temporary sandbox and will retry."))
 
 	return nil
 }
@@ -556,11 +556,11 @@ func applyRequiredLicenseChangesInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portage requires additional licenses to proceed:")
+	fmt.Println(ui.Warning("Portage requires additional licenses to proceed:"))
 	fmt.Println()
 
 	for _, change := range changes {
-		fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Licenses, " "))
+		fmt.Printf("  %s %s\n", change.Atom, renderInfoTokens(change.Licenses))
 
 		for _, requiredBy := range change.RequiredBy {
 			fmt.Printf("    required by: %s\n", requiredBy)
@@ -571,8 +571,8 @@ func applyRequiredLicenseChangesInSandbox(
 
 	if len(newLicenses) > 0 {
 		fmt.Println()
-		fmt.Println("Portico can accept these licenses for this transaction:")
-		fmt.Printf("  %s\n", strings.Join(newLicenses, " "))
+		fmt.Println(ui.Info("Portico can accept these licenses for this transaction:"))
+		fmt.Printf("  %s\n", renderInfoTokens(newLicenses))
 		fmt.Println()
 
 		confirmed, err := confirmDefaultNo("Accept these licenses for this transaction?")
@@ -605,7 +605,7 @@ func applyRequiredLicenseChangesInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portico applied these license changes to the temporary sandbox and will retry.")
+	fmt.Println(ui.Success("Portico applied these license changes to the temporary sandbox and will retry."))
 
 	return nil
 }
@@ -631,28 +631,28 @@ func applyMaskedPackageReportInSandbox(
 	}
 
 	fmt.Println()
-	fmt.Println("Portico detected that a package in this transaction is masked.")
+	fmt.Println(ui.Warning("Portico detected that a package in this transaction is masked."))
 	fmt.Println()
-	fmt.Println("Best candidate:")
+	fmt.Println(ui.Accent("Best candidate:"))
 	fmt.Printf("  %s::%s\n", candidate.Atom, candidate.Repository)
-	fmt.Printf("  masked by: %s\n", candidate.RawReason)
+	fmt.Printf("  masked by: %s\n", ui.Warning(candidate.RawReason))
 	fmt.Println()
 
 	if candidate.HasUnsupportedReasons() {
-		fmt.Println("Portico does not automate this mask type yet.")
+		fmt.Println(ui.Error("Portico does not automate this mask type yet."))
 		return originalErr
 	}
 
 	if candidate.HasReason(portage.MaskReasonTestingKeyword) {
 		keyword := candidate.RequiredKeyword
 		if keyword == "" {
-			fmt.Println("Portico detected a keyword mask, but could not determine the required keyword token.")
+			fmt.Println(ui.Error("Portico detected a keyword mask, but could not determine the required keyword token."))
 			return originalErr
 		}
 
 		if !maskActions.AcceptedKeywords[keyword] {
-			fmt.Println("Portico can allow this keyword for packages required by this transaction:")
-			fmt.Printf("  %s\n", keyword)
+			fmt.Println(ui.Info("Portico can allow this keyword for packages required by this transaction:"))
+			fmt.Printf("  %s\n", ui.Info(keyword))
 			fmt.Println()
 
 			confirmed, err := confirmDefaultNo("Allow this keyword for this transaction?")
@@ -677,14 +677,14 @@ func applyMaskedPackageReportInSandbox(
 
 	if candidate.HasReason(portage.MaskReasonLicense) {
 		if len(candidate.RequiredLicenses) == 0 {
-			fmt.Println("Portico detected a license mask, but could not determine the required license tokens.")
+			fmt.Println(ui.Error("Portico detected a license mask, but could not determine the required license tokens."))
 			return originalErr
 		}
 
 		newLicenses := newLicenseTokens(maskActions, candidate.RequiredLicenses)
 		if len(newLicenses) > 0 {
-			fmt.Println("Portico can accept these licenses for packages required by this transaction:")
-			fmt.Printf("  %s\n", strings.Join(newLicenses, " "))
+			fmt.Println(ui.Info("Portico can accept these licenses for packages required by this transaction:"))
+			fmt.Printf("  %s\n", renderInfoTokens(newLicenses))
 			fmt.Println()
 
 			confirmed, err := confirmDefaultNo("Accept these licenses for this transaction?")
@@ -1195,7 +1195,7 @@ func renderRequiredUseChanges(changes []portage.RequiredUseChange) {
 	fmt.Println("Sandbox dependency USE changes:")
 
 	for _, change := range changes {
-		fmt.Printf("  %s %s\n", change.Atom, strings.Join(change.Flags, " "))
+		fmt.Printf("  %s %s\n", change.Atom, renderUSEChangeTokens(change.Flags))
 
 		for _, requiredBy := range change.RequiredBy {
 			fmt.Printf("    required by: %s\n", requiredBy)

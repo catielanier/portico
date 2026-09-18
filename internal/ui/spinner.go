@@ -31,9 +31,12 @@ func RunStep(label string, run func() error) error {
 func RunStepContext(label string, run func(context.Context) error) error {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	spin := spinner.New()
+	styleSpinner(&spin.Style)
+
 	model := stepModel{
 		label:  label,
-		spin:   spinner.New(),
+		spin:   spin,
 		run:    run,
 		ctx:    ctx,
 		cancel: cancel,
@@ -97,10 +100,10 @@ func (m stepModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m stepModel) View() string {
 	if m.done {
 		if m.err != nil {
-			return fmt.Sprintf("✗ %s\n", m.label)
+			return fmt.Sprintf("%s %s\n", Error("✗"), m.label)
 		}
 
-		return fmt.Sprintf("✓ %s\n", m.label)
+		return fmt.Sprintf("%s %s\n", Success("✓"), m.label)
 	}
 
 	return fmt.Sprintf("%s %s\n", m.spin.View(), m.label)
