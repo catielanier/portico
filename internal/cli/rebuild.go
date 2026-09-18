@@ -47,6 +47,11 @@ var rebuildCmd = &cobra.Command{
 		requiredUseChanges := make([]portage.RequiredUseChange, 0)
 
 		if err := resolveInitialRebuildMasksInSandbox(atoms, sandbox, maskActions, &requiredUseChanges); err != nil {
+			if isRequiredUseResolutionCancelled(err) {
+				fmt.Println("Rebuild cancelled.")
+				return nil
+			}
+
 			return err
 		}
 
@@ -55,7 +60,7 @@ var rebuildCmd = &cobra.Command{
 		selectionsByAtom := make(map[string][]useflags.FlagSelection)
 		packageUsePaths := make([]string, 0, len(atoms))
 
-		querier := portage.NewEqueryQuerier()
+		querier := portage.NewEqueryQuerierWithConfigRoot(sandbox.Root)
 
 		for _, atom := range atoms {
 			queryResult, err := querier.Query(atom)
@@ -67,7 +72,7 @@ var rebuildCmd = &cobra.Command{
 
 			selections := useflags.FromQuery(queryResult)
 
-			selected, ok, err := ui.RunUsePicker(atom, selections)
+			selected, ok, err := ui.RunUsePicker(atom, selections, queryResult.RequiredUse)
 			if err != nil {
 				return err
 			}
@@ -95,6 +100,11 @@ var rebuildCmd = &cobra.Command{
 
 		pretendResolution, err := resolveRebuildPretendProblemsInSandbox(atoms, sandbox, maskActions, requiredUseChanges)
 		if err != nil {
+			if isRequiredUseResolutionCancelled(err) {
+				fmt.Println("Rebuild cancelled.")
+				return nil
+			}
+
 			return err
 		}
 
@@ -195,6 +205,19 @@ func resolveInitialRebuildMasksInSandbox(
 			return initialPretendErr
 		}
 
+		if handled, err := resolveRequiredUseFailureInSandbox(
+			initialPretendResult.Raw,
+			sandbox,
+			atoms,
+			requiredUseChanges,
+		); handled || err != nil {
+			if err != nil {
+				return err
+			}
+
+			continue
+		}
+
 		if handled, err := resolveAutounmaskChangesInSandbox(
 			initialPretendResult.Raw,
 			sandbox,
@@ -260,6 +283,19 @@ func resolveRebuildPretendProblemsInSandbox(
 		if pretendResult == nil {
 			resolution.RequiredUseChanges = dedupeRequiredUseChanges(resolution.RequiredUseChanges)
 			return resolution, nil
+		}
+
+		if handled, err := resolveRequiredUseFailureInSandbox(
+			pretendResult.Raw,
+			sandbox,
+			atoms,
+			&resolution.RequiredUseChanges,
+		); handled || err != nil {
+			if err != nil {
+				return nil, err
+			}
+
+			continue
 		}
 
 		if handled, err := resolveAutounmaskChangesInSandbox(

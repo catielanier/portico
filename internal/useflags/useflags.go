@@ -70,3 +70,28 @@ func SelectedFlags(selections []FlagSelection) []string {
 
 	return out
 }
+
+func EffectiveEnabled(selection FlagSelection) bool {
+	switch selection.Selection {
+	case SelectionEnabled:
+		return true
+	case SelectionDisabled:
+		return false
+	default:
+		return selection.CurrentEnabled
+	}
+}
+
+func EffectiveEnabledMap(selections []FlagSelection) map[string]bool {
+	enabled := make(map[string]bool, len(selections))
+
+	for _, selection := range selections {
+		if selection.Name == "" {
+			continue
+		}
+
+		enabled[selection.Name] = EffectiveEnabled(selection)
+	}
+
+	return enabled
+}
