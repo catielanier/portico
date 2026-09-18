@@ -4,7 +4,7 @@ All notable changes to Portico will be documented in this file.
 
 Portico follows semantic versioning before 1.0 loosely: patch releases may still include internal refactors when they support bug fixes.
 
-## 0.5.5
+## [0.5.5] - 2026-09-18
 
 ### Added
 
