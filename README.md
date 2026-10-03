@@ -16,6 +16,31 @@ It is meant to make common Portage tasks easier to understand without hiding wha
   <img src="img/Portico-2.png" alt="Portico package workflow and transaction preview" width="900">
 </p>
 
+## Terminal colors
+
+Portico uses restrained semantic color to make terminal output easier to scan while keeping symbols and text authoritative.
+
+The default UI uses standard ANSI terminal colors instead of hardcoded RGB or hex values, so your terminal theme controls the actual shades.
+
+Semantic roles include:
+
+- success / completed actions → terminal green
+- errors / blocked actions → terminal red
+- warnings / caution → terminal yellow
+- informational highlights → terminal cyan
+- active selection / focus → terminal blue plus a non-color focus indicator
+- secondary / disabled information → terminal dim or muted styling
+
+Color supplements existing symbols such as `+`, `-`, `✓`, `✗`, brackets, and cursor markers. Portico does not rely on color alone to communicate state.
+
+To disable color, set `NO_COLOR` in the environment:
+
+```sh
+env NO_COLOR=1 portico query net-irc/irssi
+```
+
+Portico also avoids ANSI color when output is not connected to a terminal, when `TERM=dumb`, or when `CLICOLOR=0`.
+
 ## What Portico does
 
 Portico helps with:
@@ -300,6 +325,29 @@ If only one repository provides the requested atom, Portico continues normally.
 
 If multiple repositories provide the atom, Portico will not silently choose one.
 
+### REQUIRED_USE validation
+
+Portico validates the selected package's `REQUIRED_USE` constraints while you configure USE flags.
+
+If the current selection violates an ebuild constraint, Portico shows the conflict in the USE picker and disables confirmation until the selection becomes valid.
+
+For example, constraints such as:
+
+```text
+^^ ( foo bar baz )
+|| ( foo bar )
+?? ( foo bar baz )
+foo? ( bar !baz )
+```
+
+are evaluated against the effective USE state as flags are changed.
+
+Portico does not silently resolve semantic USE conflicts. You decide which flags to change.
+
+`emerge --pretend` remains authoritative. If Portage still reports a `REQUIRED_USE` failure after the picker, Portico intercepts the failure, reopens the affected package's USE picker against the temporary sandbox state, and retries dependency resolution after you confirm a valid selection.
+
+This fallback also covers dependency packages whose own `REQUIRED_USE` constraints are exposed only during the full transaction.
+
 Portico will:
 
 - inspect USE flags for each requested package
@@ -416,7 +464,7 @@ sudo portico update app-portage/portico
 
 If a newer eligible version is available and Portage would normally update Portico, but `sudo portico update` does not include it in the world update, please report that behavior as a bug.
 
-Current limitation: update can handle some package-specific license requirements, but update-time USE autounmask changes are not fully supported yet.
+During update resolution, Portico can apply supported package-specific USE, keyword, and license changes to its temporary Portage configuration sandbox, re-run the pretend transaction, and continue until the update resolves or no further supported progress can be made. `REQUIRED_USE` conflicts use the same interactive resolution flow as install/rebuild. Confirmed changes are reviewed together before Portico writes its scoped `90-portico` configuration files and runs the real update. Unsupported mask types remain blockers and are not silently unmasked.
 
 ## Uninstall packages
 
@@ -726,6 +774,7 @@ Portico expects a Gentoo system with Portage available.
 Required Gentoo tools:
 
 - `emerge`
+- `portageq`
 - `equery`
 - `emaint`
 - `eselect repository`
