@@ -71,9 +71,9 @@ func TestUpdateHasConfigurationChanges(t *testing.T) {
 
 func TestApplyRequestedUseFlagsToSelections(t *testing.T) {
 	selections := []useflags.FlagSelection{
-		{Name: "foo", CurrentEnabled: false},
-		{Name: "bar", CurrentEnabled: true},
-		{Name: "baz", CurrentEnabled: true},
+		{Name: "foo", CurrentEnabled: false, Selection: useflags.SelectionUnset},
+		{Name: "bar", CurrentEnabled: true, Selection: useflags.SelectionUnset},
+		{Name: "baz", CurrentEnabled: true, Selection: useflags.SelectionUnset},
 	}
 
 	applyRequestedUseFlagsToSelections(selections, []string{"foo", "-bar"})
